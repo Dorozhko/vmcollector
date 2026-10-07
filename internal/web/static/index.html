@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>VM Collector</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <img class="collector-icon-image" src="/static/vmcollector-icon.png" alt="VM Collector">
+        <div>
+            <h1>VM Collector</h1>
+            <div class="status-line">
+                <span id="status-dot" class="status-dot"></span>
+                <span id="status">Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="top-actions">
+        <div class="error-counter">
+            Errors:
+            <strong id="error-count">0</strong>
+        </div>
+        <button id="save" class="primary">Save & Apply</button>
+    </div>
+</header>
+
+<main>
+
+    <!-- Metrics -->
+    <section class="panel">
+        <div class="section-head">
+            <div>
+                <h2>Metrics</h2>
+                <div class="section-subtitle">
+                    Modbus TCP and system metrics
+                </div>
+            </div>
+
+            <button id="add" class="primary">
+                + Add Metric
+            </button>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>On</th>
+                    <th>Status</th>
+                    <th>Name</th>
+                    <th>Source</th>
+                    <th>Metric</th>
+                    <th>Details</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+
+    </section>
+
+
+    <!-- Victoria Metrics -->
+    <section class="panel vm-panel">
+        <div class="vm-settings">
+            <div class="vm-settings-form">
+
+                <div class="vm-field">
+                    <label for="vm-address">Victoria Metrics API:Port</label>
+                    <input
+                        id="vm-address"
+                        type="text"
+                        placeholder="http://127.0.0.1:8428"
+                    >
+                </div>
+
+                <div class="vm-enabled-field">
+                    <label>Connection</label>
+
+                    <div class="vm-connection-control">
+
+                        <label class="vm-switch">
+                            <input
+                                id="vm-toggle"
+                                class="vm-switch-input"
+                                type="checkbox"
+                            >
+                            <span class="vm-switch-slider"></span>
+                        </label>
+
+                        <span id="vm-toggle-label" class="vm-toggle-text">
+                            OFF
+                        </span>
+
+                        <span id="vm-status" class="vm-status disabled">
+                            <span class="vm-status-dot"></span>
+                            <span id="vm-status-text">Disabled</span>
+                        </span>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Error Logs -->
+    <section class="panel">
+
+
+        <div class="section-head logs-head">
+            <div>
+                <h2>Error Logs</h2>
+                <div class="section-subtitle">
+                    Last 100 collector messages
+                </div>
+            </div>
+
+            <div class="log-filters">
+                <button class="filter active" data-level="all">All</button>
+                <button class="filter" data-level="info">Info</button>
+                <button class="filter" data-level="warning">Warning</button>
+                <button class="filter" data-level="error">Error</button>
+                <button class="clear-logs" id="clear-logs">Clear Logs</button>
+            </div>
+        </div>
+
+        <div id="logs" class="logs"></div>
+
+    </section>
+
+    <!-- Advanced configuration -->
+    <section class="panel advanced">
+
+        <button id="json-toggle" class="advanced-toggle">
+            <span>▸</span>
+            Configuration JSON
+        </button>
+
+        <div id="json-container" class="json-container hidden">
+            <textarea id="json" spellcheck="false"></textarea>
+        </div>
+
+    </section>
+
+</main>
+
+<!-- Metric editor -->
+<div id="modal" class="modal hidden">
+
+    <div class="modal-backdrop"></div>
+
+    <div class="modal-window">
+
+        <div class="modal-header">
+            <h2 id="modal-title">Add Metric</h2>
+            <button id="modal-close" class="icon-button">×</button>
+        </div>
+
+        <div class="form">
+
+            <div class="field">
+                <label>Name</label>
+                <input id="f-name" type="text">
+            </div>
+
+            <div class="field">
+                <label>Source</label>
+                <select id="f-source">
+                    <option value="cpu">CPU</option>
+                    <option value="memory">Memory</option>
+                    <option value="storage">Storage</option>
+                    <option value="temperature">Temperature</option>
+                    <option value="network">Network</option>
+                    <option value="uptime">Uptime</option>
+                    <option value="file">File</option>
+                    <option value="modbus">Modbus TCP</option>
+                </select>
+            </div>
+
+            <div id="dynamic-fields"></div>
+
+        </div>
+
+        <div class="modal-footer">
+            <button id="modal-cancel">Cancel</button>
+            <button id="modal-save" class="primary">Save Metric</button>
+        </div>
+
+    </div>
+
+</div>
+
+<script src="/static/app.js"></script>
+
+</body>
+</html>

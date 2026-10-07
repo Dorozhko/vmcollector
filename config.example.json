@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "collector": { "poll_interval": "5s", "timeout": "1s", "retries": 2 },
+  "modbus": {
+    "controllers": [
+      {
+        "name": "s7-200-chiller",
+        "address": "192.168.1.10:502",
+        "unit_id": 3,
+        "registers": [
+          { "enabled": true, "name": "chiller_water_temperature", "address": 40001, "function": "holding", "type": "float32", "byte_order": "ABCD", "word_order": "AB" },
+          { "enabled": true, "name": "compressor_1_low_pressure", "address": 40005, "function": "holding", "type": "float32", "labels": { "compressor": "1" } }
+        ]
+      }
+    ]
+  },
+  "system": {
+    "enabled": true,
+    "poll_interval": "5s",
+    "metrics": [
+      { "enabled": true, "name": "system_cpu_usage_percent", "source": "cpu", "metric": "usage" },
+      { "enabled": true, "name": "system_memory_used_bytes", "source": "memory", "metric": "used" },
+      { "enabled": true, "name": "system_root_used_bytes", "source": "storage", "metric": "used", "path": "/" },
+      { "enabled": true, "name": "system_soc_temperature_celsius", "source": "temperature", "path": "/sys/class/thermal/thermal_zone0/temp", "scale": 0.001, "labels": { "sensor": "soc" } },
+      { "enabled": true, "name": "system_nvme_temperature_celsius", "source": "temperature", "path": "/sys/class/hwmon/hwmon2/temp1_input", "scale": 0.001, "labels": { "sensor": "nvme" } }
+    ]
+  },
+  "output": { "victoriametrics": { "address": "http://127.0.0.1:8428", "enabled": true, "timeout": "10s" } },
+  "web": { "listen": "0.0.0.0:8888" }
+}

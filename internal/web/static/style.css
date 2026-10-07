@@ -1,0 +1,1040 @@
+:root {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #17202a;
+    background: #f3f4f6;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #f3f4f6;
+}
+
+/* ---------- Header ---------- */
+
+.topbar {
+    height: 68px;
+    background: #111827;
+    color: #fff;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 28px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.collector-icon {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 9px;
+
+    background: #2563eb;
+    color: white;
+
+    font-size: 18px;
+    font-weight: 700;
+}
+
+h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.status-line {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    margin-top: 3px;
+
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+
+    border-radius: 50%;
+
+    background: #6b7280;
+}
+
+.status-dot.running {
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .15);
+}
+
+.status-dot.stopped {
+    background: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .15);
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.error-counter {
+    color: #d1d5db;
+    font-size: 13px;
+}
+
+.error-counter strong {
+    margin-left: 4px;
+    color: #f87171;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+    border: 1px solid #d1d5db;
+    background: #fff;
+
+    border-radius: 6px;
+
+    padding: 7px 11px;
+
+    font-size: 13px;
+
+    cursor: pointer;
+}
+
+button:hover {
+    background: #f9fafb;
+}
+
+button.primary {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: white;
+}
+
+button.primary:hover {
+    background: #1d4ed8;
+}
+
+button.danger {
+    color: #dc2626;
+}
+
+button.danger:hover {
+    background: #fef2f2;
+}
+
+/* ---------- Layout ---------- */
+
+main {
+    max-width: 1400px;
+
+    margin: 24px auto;
+
+    padding: 0 22px;
+}
+
+.panel {
+    background: #fff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    margin-bottom: 20px;
+
+    overflow: hidden;
+}
+
+.section-head {
+    min-height: 68px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 14px 18px;
+
+    border-bottom: 1px solid #e5e7eb;
+}
+
+h2 {
+    margin: 0;
+
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.section-subtitle {
+    margin-top: 3px;
+
+    color: #6b7280;
+
+    font-size: 12px;
+}
+
+/* ---------- Metrics table ---------- */
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 10px 14px;
+
+    border-bottom: 1px solid #eef0f2;
+
+    text-align: left;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+}
+
+th {
+    background: #fafafa;
+
+    color: #6b7280;
+
+    font-size: 12px;
+    font-weight: 600;
+}
+
+tr:last-child td {
+    border-bottom: 0;
+}
+
+tr:hover td {
+    background: #fafafa;
+}
+
+.metric-name {
+    font-weight: 500;
+}
+
+.details {
+    color: #6b7280;
+
+    max-width: 320px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.actions {
+    text-align: right;
+}
+
+.actions button {
+    margin-left: 4px;
+}
+
+.source-badge {
+    display: inline-block;
+
+    padding: 3px 7px;
+
+    border-radius: 5px;
+
+    background: #eef2ff;
+    color: #3730a3;
+
+    font-size: 11px;
+}
+
+.metric-status {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.metric-status > span {
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: #22c55e;
+}
+
+.metric-status.disabled {
+    color: #9ca3af;
+}
+
+.metric-status.disabled > span {
+    background: #9ca3af;
+}
+
+.empty {
+    padding: 35px;
+
+    text-align: center;
+
+    color: #9ca3af;
+}
+
+/* ---------- Logs ---------- */
+
+.logs-head {
+    min-height: 64px;
+}
+
+.log-filters {
+    display: flex;
+    gap: 5px;
+}
+
+.filter {
+    padding: 5px 9px;
+
+    border-radius: 5px;
+
+    background: #fff;
+
+    color: #6b7280;
+}
+
+.filter.active {
+    background: #111827;
+    border-color: #111827;
+
+    color: #fff;
+}
+
+.logs {
+    max-height: 360px;
+
+    overflow-y: auto;
+}
+
+.log-entry {
+    display: grid;
+
+    grid-template-columns: 90px 75px 1fr;
+
+    gap: 10px;
+
+    align-items: center;
+
+    padding: 9px 16px;
+
+    border-bottom: 1px solid #f0f1f2;
+
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    font-size: 12px;
+}
+
+.log-entry:last-child {
+    border-bottom: 0;
+}
+
+.log-time {
+    color: #9ca3af;
+}
+
+.log-level {
+    font-weight: 700;
+}
+
+.log-level.info {
+    color: #2563eb;
+}
+
+.log-level.warning {
+    color: #d97706;
+}
+
+.log-level.error {
+    color: #dc2626;
+}
+
+.log-message {
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.logs-empty {
+    padding: 30px;
+
+    text-align: center;
+
+    color: #9ca3af;
+}
+
+/* ---------- Advanced JSON ---------- */
+
+.advanced-toggle {
+    width: 100%;
+
+    border: 0;
+    border-radius: 0;
+
+    background: #fff;
+
+    padding: 15px 18px;
+
+    text-align: left;
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.advanced-toggle:hover {
+    background: #fafafa;
+}
+
+.json-container {
+    padding: 0 18px 18px;
+}
+
+.json-container.hidden {
+    display: none;
+}
+
+textarea {
+    width: 100%;
+
+    min-height: 350px;
+
+    resize: vertical;
+
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+
+    padding: 12px;
+
+    background: #111827;
+    color: #e5e7eb;
+
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    outline: none;
+}
+
+textarea:focus {
+    border-color: #2563eb;
+}
+
+/* ---------- Modal ---------- */
+
+.modal {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 1000;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+
+    inset: 0;
+
+    background: rgba(17, 24, 39, .55);
+}
+
+.modal-window {
+    position: relative;
+
+    width: min(560px, calc(100vw - 30px));
+
+    max-height: calc(100vh - 40px);
+
+    display: flex;
+    flex-direction: column;
+
+    background: #fff;
+
+    border-radius: 10px;
+
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .25);
+
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 15px 18px;
+
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.icon-button {
+    width: 32px;
+    height: 32px;
+
+    padding: 0;
+
+    border: 0;
+
+    font-size: 22px;
+
+    color: #6b7280;
+}
+
+.form {
+    padding: 18px;
+
+    overflow-y: auto;
+}
+
+.field {
+    margin-bottom: 14px;
+}
+
+.field:last-child {
+    margin-bottom: 0;
+}
+
+.field label {
+    display: block;
+
+    margin-bottom: 5px;
+
+    color: #4b5563;
+
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.field input,
+.field select {
+    width: 100%;
+
+    height: 36px;
+
+    padding: 7px 9px;
+
+    border: 1px solid #d1d5db;
+
+    border-radius: 6px;
+
+    background: #fff;
+
+    color: #111827;
+
+    font-size: 13px;
+
+    outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+    border-color: #2563eb;
+
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, .1);
+}
+
+.modal-footer {
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 8px;
+
+    padding: 13px 18px;
+
+    border-top: 1px solid #e5e7eb;
+
+    background: #fafafa;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 800px) {
+
+    .topbar {
+        height: auto;
+
+        padding: 14px 16px;
+
+        gap: 15px;
+
+        align-items: flex-start;
+    }
+
+    .top-actions {
+        flex-direction: column;
+
+        align-items: flex-end;
+
+        gap: 8px;
+    }
+
+    main {
+        margin-top: 15px;
+
+        padding: 0 10px;
+    }
+
+    .section-head {
+        align-items: flex-start;
+
+        gap: 10px;
+    }
+
+    .logs-head {
+        flex-direction: column;
+    }
+
+    .log-entry {
+        grid-template-columns: 75px 65px 1fr;
+
+        padding: 8px 10px;
+    }
+}
+
+
+/* Metric status colors */
+.metric-status.ok {
+    color: #16a34a !important;
+}
+
+.metric-status.ok > span {
+    background: #22c55e !important;
+}
+
+.metric-status.error {
+    color: #dc2626 !important;
+}
+
+.metric-status.error > span {
+    background: #ef4444 !important;
+}
+
+.metric-status.disabled {
+    color: #9ca3af !important;
+}
+
+.metric-status.disabled > span {
+    background: #9ca3af !important;
+}
+
+.metric-status.pending {
+    color: #6b7280 !important;
+}
+
+.metric-status.pending > span {
+    background: #9ca3af !important;
+}
+
+.collector-icon-image {
+    width: 38px;
+    height: 38px;
+    display: block;
+    object-fit: contain;
+    border-radius: 9px;
+}
+
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+.login-card {
+    width: min(380px, calc(100vw - 40px));
+    padding: 36px;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.login-icon {
+    width: 64px;
+    height: 64px;
+    display: block;
+    object-fit: contain;
+    border-radius: 14px;
+    margin: 0 auto 18px;
+}
+
+.login-card h1 {
+    text-align: center;
+    margin: 0;
+}
+
+.login-subtitle {
+    text-align: center;
+    margin: 8px 0 28px;
+    opacity: 0.65;
+}
+
+.login-card label {
+    display: block;
+    margin: 14px 0 6px;
+    font-weight: 600;
+}
+
+.login-card input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.login-card button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 11px 14px;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.login-error {
+    min-height: 20px;
+    margin-top: 14px;
+    text-align: center;
+    color: #dc2626;
+}
+
+.clear-logs {
+    margin-left: 8px;
+    padding: 6px 11px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.clear-logs:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.clear-logs:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+
+/* Victoria Metrics settings */
+.vm-settings {
+    padding: 24px 28px 26px;
+}
+
+.vm-settings-form {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) 180px;
+    gap: 18px;
+    align-items: end;
+}
+
+.vm-field,
+.vm-enabled-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vm-field label,
+.vm-enabled-field > label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.vm-field input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    height: 42px;
+    padding: 0 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+.vm-field input[type="text"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.vm-enabled-control {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 13px;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.vm-enabled-control input {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+}
+
+.vm-enabled-control span {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.vm-description {
+    margin-top: 16px;
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+@media (max-width: 700px) {
+    .vm-settings-form {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* Victoria Metrics standalone integration panel */
+.vm-panel {
+    overflow: hidden;
+}
+
+.vm-panel .vm-settings {
+    margin: 0;
+}
+
+.vm-panel .vm-settings-form {
+    padding: 18px 24px 22px;
+}
+
+
+/* ============================================================
+   VM CONNECTION — NATIVE SWITCH, NO BROWSER CHECKBOX
+   ============================================================ */
+
+.vm-connection-control {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-height: 44px !important;
+    padding: 0 12px !important;
+    border: 1px solid #d5dce6 !important;
+    border-radius: 9px !important;
+    background: #fff !important;
+}
+
+.vm-switch {
+    position: relative !important;
+    display: block !important;
+    width: 52px !important;
+    height: 28px !important;
+    min-width: 52px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    cursor: pointer !important;
+}
+
+.vm-switch-input {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    position: absolute !important;
+    display: block !important;
+    width: 52px !important;
+    height: 28px !important;
+    min-width: 52px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    outline: 0 !important;
+    border-radius: 999px !important;
+    background: #aeb8c5 !important;
+    cursor: pointer !important;
+    box-sizing: border-box !important;
+}
+
+.vm-switch-input::before {
+    content: "" !important;
+    position: absolute !important;
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    left: 3px !important;
+    top: 3px !important;
+    border-radius: 50% !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,.30) !important;
+    transition: transform .18s ease !important;
+}
+
+.vm-switch-input:checked {
+    background: #2563eb !important;
+}
+
+.vm-switch-input:checked::before {
+    transform: translateX(24px) !important;
+}
+
+.vm-toggle-text {
+    display: inline-block !important;
+    min-width: 24px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #334155 !important;
+}
+
+.vm-status {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    margin-left: auto !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+}
+
+.vm-status-dot {
+    display: block !important;
+    width: 8px !important;
+    height: 8px !important;
+    min-width: 8px !important;
+    border-radius: 50% !important;
+}
+
+.vm-status.connected {
+    color: #16a34a !important;
+}
+
+.vm-status.connected .vm-status-dot {
+    background: #22c55e !important;
+}
+
+.vm-status.error {
+    color: #dc2626 !important;
+}
+
+.vm-status.error .vm-status-dot {
+    background: #ef4444 !important;
+}
+
+.vm-status.waiting {
+    color: #64748b !important;
+}
+
+.vm-status.waiting .vm-status-dot {
+    background: #94a3b8 !important;
+}
+
+.vm-status.disabled {
+    color: #94a3b8 !important;
+}
+
+.vm-status.disabled .vm-status-dot {
+    background: #aeb8c5 !important;
+}
+
+/* Victoria Metrics connection control — spacing */
+.vm-enabled-field {
+    min-width: 270px !important;
+}
+
+.vm-connection-control {
+    min-width: 270px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding-left: 14px !important;
+    padding-right: 18px !important;
+    gap: 14px !important;
+}
+
+.vm-status {
+    margin-left: auto !important;
+    padding-left: 8px !important;
+    padding-right: 2px !important;
+}
+
+
+/* Final VM connection frame size */
+.vm-enabled-field {
+    min-width: 235px !important;
+}
+
+.vm-connection-control {
+    min-width: 235px !important;
+    width: 235px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    gap: 10px !important;
+}
+
+.vm-status {
+    margin-left: auto !important;
+    padding-left: 4px !important;
+    padding-right: 0 !important;
+}
+
+
+/* Compact Victoria Metrics connection control */
+.vm-enabled-field {
+    min-width: 190px !important;
+}
+
+.vm-connection-control {
+    min-width: 190px !important;
+    width: 190px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    gap: 8px !important;
+}
+
+.vm-status {
+    margin-left: auto !important;
+    padding-left: 2px !important;
+    padding-right: 0 !important;
+}
+

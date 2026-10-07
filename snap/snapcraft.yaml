@@ -1,0 +1,29 @@
+name: modbus-vmagent
+title: Modbus VM Agent
+base: core24
+version: '0.1.0'
+summary: Lightweight Modbus TCP collector for VictoriaMetrics
+description: |
+  Lightweight Go Modbus TCP collector with direct VictoriaMetrics Remote Write output.
+confinement: strict
+
+auto-aliases: false
+
+apps:
+  daemon:
+    command: bin/modbus-vmagent -config=$SNAP_COMMON/config.json
+    daemon: simple
+    plugs:
+      - network
+      - network-bind
+
+parts:
+  modbus-vmagent:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.26/stable
+    build-packages:
+      - git
+    override-build: |
+      go build -trimpath -ldflags='-s -w' -o "$SNAPCRAFT_PART_INSTALL/bin/modbus-vmagent" ./cmd/modbus-vmagent
