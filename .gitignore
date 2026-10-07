@@ -4,7 +4,7 @@ config.json.bak*
 *.local.json
 
 # Build artifacts
-modbus-vmagent
+vmcollector
 *.snap
 *.deb
 *.tar.gz

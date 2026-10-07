@@ -1,4 +1,4 @@
-module github.com/yura/modbus-vmagent
+module github.com/yura/vmcollector
 
 go 1.27.1
 

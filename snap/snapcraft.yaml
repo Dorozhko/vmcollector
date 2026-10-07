@@ -1,5 +1,5 @@
-name: modbus-vmagent
-title: Modbus VM Agent
+name: vmcollector
+title: VM Collector
 base: core24
 version: '0.1.0'
 summary: Lightweight Modbus TCP collector for VictoriaMetrics
@@ -7,18 +7,25 @@ description: |
   Lightweight Go Modbus TCP collector with direct VictoriaMetrics Remote Write output.
 confinement: strict
 
+platforms:
+  riscv64:
+    build-on:
+      - arm64
+    build-for:
+      - riscv64
+
 auto-aliases: false
 
 apps:
   daemon:
-    command: bin/modbus-vmagent -config=$SNAP_COMMON/config.json
+    command: bin/vmcollector -config=$SNAP_COMMON/config.json
     daemon: simple
     plugs:
       - network
       - network-bind
 
 parts:
-  modbus-vmagent:
+  vmcollector:
     plugin: go
     source: .
     build-snaps:
@@ -26,4 +33,7 @@ parts:
     build-packages:
       - git
     override-build: |
-      go build -trimpath -ldflags='-s -w' -o "$SNAPCRAFT_PART_INSTALL/bin/modbus-vmagent" ./cmd/modbus-vmagent
+      export GOOS=linux
+      export GOARCH=riscv64
+      export CGO_ENABLED=0
+      go build -trimpath -ldflags='-s -w' -o "$SNAPCRAFT_PART_INSTALL/bin/vmcollector" ./cmd/vmcollector

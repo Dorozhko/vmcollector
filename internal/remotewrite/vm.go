@@ -12,7 +12,7 @@ import (
 
 	vmzstd "github.com/VictoriaMetrics/VictoriaMetrics/lib/encoding/zstd"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/prompb"
-	"github.com/yura/modbus-vmagent/internal/metric"
+	"github.com/yura/vmcollector/internal/metric"
 )
 
 type Client struct {
@@ -109,7 +109,7 @@ func (c *Client) Write(ctx context.Context, samples []metric.Sample) error {
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	req.Header.Set("Content-Encoding", "zstd")
 	req.Header.Set("X-VictoriaMetrics-Remote-Write-Version", "1")
-	req.Header.Set("User-Agent", "modbus-vmagent")
+	req.Header.Set("User-Agent", "vmcollector")
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yura/modbus-vmagent/internal/config"
-	"github.com/yura/modbus-vmagent/internal/metric"
+	"github.com/yura/vmcollector/internal/config"
+	"github.com/yura/vmcollector/internal/metric"
 )
 
 type MetricResult struct {

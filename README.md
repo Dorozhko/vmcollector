@@ -1,4 +1,4 @@
-# modbus-vmagent
+# vmcollector
 
 Lightweight Go Modbus TCP collector designed around the VictoriaMetrics vmagent remote-write model.
 
@@ -15,7 +15,7 @@ Lightweight Go Modbus TCP collector designed around the VictoriaMetrics vmagent 
 ## Configuration
 
 ```bash
-./modbus-vmagent -config=/path/to/config.json
+./vmcollector -config=/path/to/config.json
 ```
 
 See `config.example.json`.
@@ -36,5 +36,5 @@ The wire format follows the current VictoriaMetrics remote-write implementation 
 ## Development
 
 ```bash
-go build ./cmd/modbus-vmagent
+go build ./cmd/vmcollector
 ```

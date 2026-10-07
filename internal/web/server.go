@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/yura/modbus-vmagent/internal/config"
+	"github.com/yura/vmcollector/internal/config"
 )
 
 //go:embed static/*
