@@ -33,7 +33,7 @@ parts:
       - git
     override-build: |
       export GOOS=linux
-      export GOARCH=riscv64
+      export GOARCH="$CRAFT_ARCH_BUILD_FOR"
       export CGO_ENABLED=0
       install -m 0755 snap/local/vmcollector-launch "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-launch"
       go build -trimpath -ldflags='-s -w' -o "$SNAPCRAFT_PART_INSTALL/bin/vmcollector" ./cmd/vmcollector
