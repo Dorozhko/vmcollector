@@ -27,7 +27,7 @@ apps:
 parts:
   vmcollector:
     plugin: go
-    source: .
+    source: https://github.com/Dorozhko/vmcollector.git
     build-snaps:
       - go/1.26/stable
     build-packages:

@@ -1,40 +1,99 @@
-# vmcollector
+# VM Collector
 
-Lightweight Go Modbus TCP collector designed around the VictoriaMetrics vmagent remote-write model.
+**Lightweight Modbus TCP & Linux system metrics collector for VictoriaMetrics.**
 
-## Current V1
+VM Collector collects metrics from industrial devices and Linux systems and sends them directly to VictoriaMetrics using Remote Write.
 
-- JSON configuration using Go standard library `encoding/json`.
-- Modbus TCP input.
-- FC03 holding-register reads.
-- INT16, UINT16, INT32, UINT32 and FLOAT32 decoding.
-- Direct VictoriaMetrics Remote Write v1 output using protobuf + zstd.
-- Minimal HTTP status page.
-- RISC-V/ARM64-friendly single Go binary design.
+<p align="center">
+  <strong>Modbus TCP</strong>
+  &nbsp;→&nbsp;
+  <strong>VM Collector</strong>
+  &nbsp;→&nbsp;
+  <strong>VictoriaMetrics</strong>
+</p>
 
-## Configuration
+---
 
-```bash
-./vmcollector -config=/path/to/config.json
-```
+## Features
 
-See `config.example.json`.
+- **Modbus TCP**
+  - Multiple controllers
+  - Manual register configuration
+  - Per-register enable/disable
+  - Configurable data types
+  - Configurable byte and word order
+  - Polling interval
+  - Timeout and retry control
 
-## VictoriaMetrics
+- **Linux System Metrics**
+  - CPU usage
+  - Memory usage
+  - Storage usage
+  - Temperature sensors
+  - Network metrics
+  - Uptime
+  - File-based metrics
 
-The default output is direct VictoriaMetrics Remote Write:
+- **VictoriaMetrics**
+  - Remote Write
+  - Configurable endpoint
+  - Configurable timeout
+  - Runtime enable/disable
+  - No connection attempts when disabled
+
+- **Embedded Web UI**
+  - Configuration management
+  - Modbus controller management
+  - Modbus register management
+  - System metric management
+  - VictoriaMetrics status
+  - Per-metric status
+  - Collector statistics
+  - Diagnostic logs
+
+- **Security**
+  - Administrator authentication
+  - bcrypt password hashing
+  - Protected configuration file
+
+- **Deployment**
+  - Standalone Go binary
+  - Snap package
+  - RISC-V64 support
+
+---
+Remote access
+-------------
+http://<COLLECTOR_IP>:8888
+-------------
+
+CLI
+____
+./modbus-vmagent -set-admin-password
+./modbus-vmagent -config config.json
+
+
+## Architecture
 
 ```text
-POST /api/v1/write
-Content-Type: application/x-protobuf
-Content-Encoding: zstd
-X-VictoriaMetrics-Remote-Write-Version: 1
-```
-
-The wire format follows the current VictoriaMetrics remote-write implementation used by vmagent.
-
-## Development
-
-```bash
-go build ./cmd/vmcollector
-```
+ ┌──────────────────┐
+ │   Modbus TCP     │
+ │   PLC / Devices  │
+ └────────┬─────────┘
+          │
+          ▼
+ ┌────────────────────────────┐
+ │        VM Collector        │
+ │                            │
+ │  Modbus TCP  │  System     │
+ │  Registers   │  Metrics    │
+ │              │             │
+ │       Embedded Web UI      │
+ └──────────────┬─────────────┘
+                │
+          Remote Write
+                │
+                ▼
+       ┌─────────────────┐
+       │ VictoriaMetrics │
+       └─────────────────┘
