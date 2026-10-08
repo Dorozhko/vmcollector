@@ -29,7 +29,7 @@ parts:
     plugin: go
     source: https://github.com/Dorozhko/vmcollector.git
     build-snaps:
-      - go/1.26/stable
+      - go/1.27/stable
     build-packages:
       - git
     override-build: |
