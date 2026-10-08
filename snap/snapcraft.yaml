@@ -8,11 +8,12 @@ description: |
 confinement: strict
 
 platforms:
+  arm64:
+    build-on: [amd64]
+    build-for: [arm64]
   riscv64:
-    build-on:
-      - arm64
-    build-for:
-      - riscv64
+    build-on: [amd64]
+    build-for: [riscv64]
 
 
 apps:
