@@ -11,6 +11,7 @@ platforms:
   riscv64:
     build-on: [arm64]
     build-for: [riscv64]
+
   arm64:
     build-on: [arm64]
     build-for: [arm64]
@@ -38,11 +39,25 @@ parts:
       - curl
     override-build: |
       set -eu
+      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
+
       install -Dm755 "$SNAPCRAFT_PART_SRC/snap/local/vmcollector-launch" "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-launch"
       install -Dm755 "$SNAPCRAFT_PART_SRC/snap/local/vmcollector-set-admin-password" "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-set-admin-password"
       install -Dm755 "$SNAPCRAFT_PART_SRC/snap/local/vmcollector-set-port" "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-set-port"
       install -Dm644 "$SNAPCRAFT_PART_SRC/config.example.json" "$SNAPCRAFT_PART_INSTALL/config.example.json"
-      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
-      curl -fL --retry 3 -o "$SNAPCRAFT_PART_INSTALL/bin/vmcollector" \
-        https://github.com/Dorozhko/vmcollector/releases/download/v0.1.0/vmcollector-linux-riscv64
+
+      case "$CRAFT_ARCH_BUILD_FOR" in
+        riscv64)
+          BINARY_URL="https://github.com/Dorozhko/vmcollector/releases/download/v0.1.0/vmcollector-linux-riscv64"
+          ;;
+        arm64)
+          BINARY_URL="https://github.com/Dorozhko/vmcollector/releases/download/v0.1.0/vmcollector-linux-arm64"
+          ;;
+        *)
+          echo "Unsupported target architecture: $CRAFT_ARCH_BUILD_FOR" >&2
+          exit 1
+          ;;
+      esac
+
+      curl -fL --retry 3 -o "$SNAPCRAFT_PART_INSTALL/bin/vmcollector" "$BINARY_URL"
       chmod 755 "$SNAPCRAFT_PART_INSTALL/bin/vmcollector"
