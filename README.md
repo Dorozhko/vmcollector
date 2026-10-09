@@ -61,21 +61,35 @@ VM Collector collects metrics from industrial devices and Linux systems and send
   - Snap package
   - RISC-V64 support
 
----
-Remote access
--------------
-http://<COLLECTOR_IP>:8888
--------------
+## Access
 
-CLI
-____
-./modbus-vmagent -set-admin-password
-./modbus-vmagent -config config.json
+### Web Interface
+
+Open the collector dashboard in your browser:
+
+`http://<COLLECTOR_IP>:8888`
+
+Replace `<COLLECTOR_IP>` with the IP address of the device running VM Collector.
+
+`### Command-Line Interface`
+
+**Set administrator password:**
+
+`./vmcollector -set-admin-passwor`
+
+**Change IP:port**
+
+`./vmcollector -set-port`
+
+**Binary run**
+
+`./vmcollector -config config.json`
+
+```bash
 
 
 ## Architecture
 
-```text
  ┌──────────────────┐
  │   Modbus TCP     │
  │   PLC / Devices  │
