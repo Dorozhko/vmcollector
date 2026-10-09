@@ -12,6 +12,11 @@ platforms:
     build-on: [arm64]
     build-for: [riscv64]
 
+  # Future expansion: build on ARM64 for the ARM64 target.
+  # arm64:
+  #   build-on: [arm64]
+  #   build-for: [arm64]
+
 apps:
   daemon:
     command: bin/vmcollector-launch
@@ -28,5 +33,18 @@ apps:
 
 parts:
   vmcollector:
-    plugin: dump
-    source: snap/local/stage
+    plugin: nil
+    source: https://github.com/Dorozhko/vmcollector.git
+    source-branch: main
+    build-packages:
+      - curl
+    override-build: |
+      set -eu
+      install -Dm755 "$SNAPCRAFT_PART_SRC/snap/local/vmcollector-launch" "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-launch"
+      install -Dm755 "$SNAPCRAFT_PART_SRC/snap/local/vmcollector-set-admin-password" "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-set-admin-password"
+      install -Dm755 "$SNAPCRAFT_PART_SRC/snap/local/vmcollector-set-port" "$SNAPCRAFT_PART_INSTALL/bin/vmcollector-set-port"
+      install -Dm644 "$SNAPCRAFT_PART_SRC/config.example.json" "$SNAPCRAFT_PART_INSTALL/config.example.json"
+      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
+      curl -fL --retry 3 -o "$SNAPCRAFT_PART_INSTALL/bin/vmcollector" \
+        https://github.com/Dorozhko/vmcollector/releases/download/v0.1.0/vmcollector-linux-riscv64
+      chmod 755 "$SNAPCRAFT_PART_INSTALL/bin/vmcollector"
