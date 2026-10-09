@@ -22,3 +22,12 @@ coverage.out
 *.bak
 *.bak-*
 *.bak[0-9]*
+
+# Local build outputs
+/bin/
+/.craft/
+/parts/
+/prime/
+/stage/
+/snap/local/stage/
+*.snapcraft-*.txt

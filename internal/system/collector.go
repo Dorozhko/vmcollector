@@ -38,24 +38,36 @@ func New(cfg config.System) *Collector {
 	return &Collector{cfg: cfg}
 }
 
-func (c *Collector) Read(ctx context.Context) ([]MetricResult, []MetricError) {
-	if !c.cfg.Enabled {
-		return nil, nil
-	}
-
+// UpdateConfig replaces the system metric configuration while preserving
+// the collector's CPU sampling state.
+func (c *Collector) UpdateConfig(cfg config.System) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.cfg = cfg
+}
 
-	results := make([]MetricResult, 0, len(c.cfg.Metrics))
+func (c *Collector) Read(ctx context.Context) ([]MetricResult, []MetricError) {
+    return c.ReadSelected(ctx, nil)
+}
+
+func (c *Collector) ReadSelected(ctx context.Context, selected map[int]bool) ([]MetricResult, []MetricError) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+
+    if !c.cfg.Enabled {
+        return nil, nil
+    }
+
+    results := make([]MetricResult, 0, len(c.cfg.Metrics))
 	errors := make([]MetricError, 0)
 
 	var cpu *cpuSnapshot
 	var mem map[string]uint64
 
 	for i, m := range c.cfg.Metrics {
-		if !m.Enabled {
-			continue
-		}
+        if !m.Enabled || (selected != nil && !selected[i]) {
+            continue
+        }
 
 		if err := ctx.Err(); err != nil {
 			errors = append(errors, MetricError{

@@ -24,28 +24,22 @@ type Collector struct {
 	Retries      int    `json:"retries"`
 }
 type Modbus struct {
-	Controllers []Controller `json:"controllers"`
-}
-type Controller struct {
-	Name      string     `json:"name"`
-	Address   string     `json:"address"`
-	UnitID    byte       `json:"unit_id"`
 	Registers []Register `json:"registers"`
 }
 type Register struct {
-	Enabled       bool              `json:"enabled"`
-	Name          string            `json:"name"`
-	DeviceAddress string            `json:"device_address,omitempty"`
-	DevicePort    uint16            `json:"device_port,omitempty"`
-	UnitID        byte              `json:"unit_id,omitempty"`
-	Address       uint16            `json:"address"`
-	Function      string            `json:"function"`
-	Type          string            `json:"type"`
-	ByteOrder     string            `json:"byte_order,omitempty"`
-	WordOrder     string            `json:"word_order,omitempty"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	Scale         float64           `json:"scale,omitempty"`
-	Offset        float64           `json:"offset,omitempty"`
+	PollInterval string            `json:"poll_interval,omitempty"`
+	Enabled      bool              `json:"enabled"`
+	Name         string            `json:"name"`
+	Device       string            `json:"device"`
+	UnitID       byte              `json:"unit_id"`
+	Address      uint16            `json:"address"`
+	Function     string            `json:"function"`
+	Type         string            `json:"type"`
+	ByteOrder    string            `json:"byte_order,omitempty"`
+	WordOrder    string            `json:"word_order,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
+	Scale        float64           `json:"scale,omitempty"`
+	Offset       float64           `json:"offset,omitempty"`
 }
 
 type System struct {
@@ -54,14 +48,15 @@ type System struct {
 	Metrics      []SystemMetric `json:"metrics"`
 }
 type SystemMetric struct {
-	Enabled bool              `json:"enabled"`
-	Name    string            `json:"name"`
-	Source  string            `json:"source"`
-	Metric  string            `json:"metric,omitempty"`
-	Path    string            `json:"path,omitempty"`
-	Scale   float64           `json:"scale,omitempty"`
-	Offset  float64           `json:"offset,omitempty"`
-	Labels  map[string]string `json:"labels,omitempty"`
+	PollInterval string            `json:"poll_interval,omitempty"`
+	Enabled      bool              `json:"enabled"`
+	Name         string            `json:"name"`
+	Source       string            `json:"source"`
+	Metric       string            `json:"metric,omitempty"`
+	Path         string            `json:"path,omitempty"`
+	Scale        float64           `json:"scale,omitempty"`
+	Offset       float64           `json:"offset,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 type Output struct {
 	VictoriaMetrics VictoriaMetrics `json:"victoriametrics"`
@@ -147,31 +142,64 @@ func (c *Config) Validate() error {
 	if _, err := time.ParseDuration(c.System.PollInterval); err != nil {
 		return fmt.Errorf("invalid system.poll_interval: %w", err)
 	}
-	for _, p := range c.Modbus.Controllers {
-		if p.Name == "" || p.Address == "" {
-			return fmt.Errorf("each controller requires name and address")
-		}
-		if p.UnitID == 0 {
-			return fmt.Errorf("controller %q: unit_id must be 1..247", p.Name)
-		}
-		for _, r := range p.Registers {
-			if r.Name == "" {
-				return fmt.Errorf("controller %q: register name is required", p.Name)
+	for _, r := range c.Modbus.Registers {
+		if r.PollInterval != "" {
+			d, err := time.ParseDuration(r.PollInterval)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("modbus register %q: poll_interval must be a positive duration", r.Name)
 			}
-			switch r.Type {
-			case "int16", "uint16", "int32", "uint32", "float32":
+		}
+		if r.Name == "" {
+			return fmt.Errorf("modbus register name is required")
+		}
+		if r.Device == "" {
+			return fmt.Errorf("modbus register %q: device is required", r.Name)
+		}
+		if r.UnitID < 1 || r.UnitID > 247 {
+			return fmt.Errorf("modbus register %q: unit_id must be 1..247", r.Name)
+		}
+
+		switch r.Type {
+		case "int16", "uint16", "int32", "uint32", "float32":
+		default:
+			return fmt.Errorf("register %q: unsupported type %q", r.Name, r.Type)
+		}
+
+		if r.Function == "" {
+			r.Function = "holding"
+		}
+		if r.Function != "holding" && r.Function != "input" {
+			return fmt.Errorf("register %q: unsupported function %q", r.Name, r.Function)
+		}
+
+		if r.Type == "float32" {
+			if r.ByteOrder == "" {
+				r.ByteOrder = "ABCD"
+			}
+			if r.WordOrder == "" {
+				r.WordOrder = "AB"
+			}
+
+			switch r.ByteOrder {
+			case "ABCD", "BADC", "CDAB", "DCBA":
 			default:
-				return fmt.Errorf("register %q: unsupported type %q", r.Name, r.Type)
+				return fmt.Errorf("register %q: unsupported byte_order %q", r.Name, r.ByteOrder)
 			}
-			if r.Function == "" {
-				r.Function = "holding"
-			}
-			if r.Function != "holding" && r.Function != "input" {
-				return fmt.Errorf("register %q: unsupported function %q", r.Name, r.Function)
+
+			switch r.WordOrder {
+			case "AB", "BA":
+			default:
+				return fmt.Errorf("register %q: unsupported word_order %q", r.Name, r.WordOrder)
 			}
 		}
 	}
 	for _, m := range c.System.Metrics {
+		if m.PollInterval != "" {
+			d, err := time.ParseDuration(m.PollInterval)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("system metric %q: poll_interval must be a positive duration", m.Name)
+			}
+		}
 		if m.Name == "" || m.Source == "" {
 			return fmt.Errorf("system metric requires name and source")
 		}

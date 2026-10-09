@@ -61,16 +61,12 @@ function allMetrics() {
         });
     });
 
-    (cfg.modbus?.controllers || []).forEach((controller, pi) => {
-        (controller.registers || []).forEach((m, i) => {
-            out.push({
-                ...m,
-                key: `modbus:${controller.name}:${i}`,
-                _kind: "modbus",
-                _pi: pi,
-                _i: i,
-                _controller: controller.name
-            });
+    (cfg.modbus?.registers || []).forEach((m, i) => {
+        out.push({
+            ...m,
+            key: `modbus:${m.name}:${i}`,
+            _kind: "modbus",
+            _i: i
         });
     });
 
@@ -201,17 +197,16 @@ function renderMetrics() {
 }
 
 function metricDetails(m) {
+    const device = m.device || "";
+    const unitID = m.unit_id ?? "—";
     const address = m.address ?? "—";
     const fn = m.function || "holding";
 
-    const device =
-        m.device_address
-            ? `${m.device_address}:${m.device_port || 502}`
-            : "";
+    const location = device
+        ? `${device} · Unit ${unitID}`
+        : `Unit ${unitID}`;
 
-    return device
-        ? `${device} · ${fn} · ${address}`
-        : `${fn} · ${address}`;
+    return `${location} · ${fn} · ${address}`;
 }
 
 function renderJSON() {
@@ -226,7 +221,7 @@ function toggleMetric(index, value) {
     if (m._kind === "system") {
         cfg.system.metrics[m._i].enabled = value;
     } else {
-        cfg.modbus.controllers[m._pi].registers[m._i].enabled = value;
+        cfg.modbus.registers[m._i].enabled = value;
     }
 
     render();
@@ -244,7 +239,7 @@ function deleteMetric(index) {
     if (m._kind === "system") {
         cfg.system.metrics.splice(m._i, 1);
     } else {
-        cfg.modbus.controllers[m._pi].registers.splice(m._i, 1);
+        cfg.modbus.registers.splice(m._i, 1);
     }
 
     render();
@@ -257,8 +252,7 @@ function editMetric(index) {
 
     editing = {
         kind: m._kind,
-        index: m._i,
-        controllerIndex: m._pi
+        index: m._i
     };
 
     openEditor(m);
@@ -285,7 +279,23 @@ function openEditor(m) {
             ? "modbus"
             : m.source || "cpu";
 
+    setPollInterval(m.poll_interval || "5s");
     renderDynamicFields(m);
+
+    const typeField = $("f-type");
+
+    if (typeField) {
+        typeField.addEventListener("change", () => {
+            const orderFields = $("float32-order-fields");
+
+            if (orderFields) {
+                orderFields.classList.toggle(
+                    "hidden",
+                    typeField.value !== "float32"
+                );
+            }
+        });
+    }
 
     $("modal").classList.remove("hidden");
 }
@@ -473,25 +483,8 @@ function renderDynamicFields(m) {
 }
 
 function renderModbusFields(m) {
-
-    const controller =
-        cfg.modbus?.controllers?.[m._pi];
-
-    let endpoint = "";
-
-    if (m.device_address) {
-        endpoint =
-            `${m.device_address}:${m.device_port || 502}`;
-    } else if (controller?.address) {
-        endpoint = controller.address;
-    }
-
-    let unitID =
-        m.unit_id || "";
-
-    if (!unitID && controller?.unit_id) {
-        unitID = controller.unit_id;
-    }
+    const endpoint = m.device || "";
+    const unitID = m.unit_id || 1;
 
     return `
         ${inputField(
@@ -542,6 +535,34 @@ function renderModbusFields(m) {
             }
         )}
 
+        <div id="float32-order-fields" class="${m.type === "float32" ? "" : "hidden"}">
+            ${selectField(
+                "Byte Order",
+                "f-byte-order",
+                [
+                    "ABCD",
+                    "BADC",
+                    "CDAB",
+                    "DCBA"
+                ],
+                m.byte_order && ["ABCD", "BADC", "CDAB", "DCBA"].includes(m.byte_order)
+                    ? m.byte_order
+                    : "ABCD"
+            )}
+
+            ${selectField(
+                "Word Order",
+                "f-word-order",
+                [
+                    "AB",
+                    "BA"
+                ],
+                m.word_order && ["AB", "BA"].includes(m.word_order)
+                    ? m.word_order
+                    : "AB"
+            )}
+        </div>
+
         ${numberField(
             "Offset",
             "f-offset",
@@ -561,27 +582,34 @@ function saveMetric() {
         return;
     }
 
+    const pollInterval = readPollInterval();
+
+    if (!pollInterval) {
+        return;
+    }
+
     if (source === "modbus") {
 
-        if (!saveModbusMetric(name)) {
+        if (!saveModbusMetric(name, pollInterval)) {
             return;
         }
 
     } else {
 
-        saveSystemMetric(name, source);
+        saveSystemMetric(name, source, pollInterval);
     }
 
     closeEditor();
     render();
 }
 
-function saveSystemMetric(name, source) {
+function saveSystemMetric(name, source, pollInterval) {
 
     const metric = {
         enabled: true,
         name,
-        source
+        source,
+        poll_interval: pollInterval
     };
 
     const metricElement = $("f-metric");
@@ -624,23 +652,14 @@ function saveSystemMetric(name, source) {
     }
 }
 
-function saveModbusMetric(name) {
+function saveModbusMetric(name, pollInterval) {
 
     if (!cfg.modbus) {
-        cfg.modbus = {
-            controllers: []
-        };
+        cfg.modbus = {};
     }
 
-    // Keep the existing controller container internally for
-    // compatibility. The user does not select it in the UI.
-    if (!cfg.modbus.controllers.length) {
-        cfg.modbus.controllers.push({
-            name: "Modbus TCP",
-            address: "127.0.0.1:502",
-            unit_id: 1,
-            registers: []
-        });
+    if (!Array.isArray(cfg.modbus.registers)) {
+        cfg.modbus.registers = [];
     }
 
     const endpoint =
@@ -658,7 +677,6 @@ function saveModbusMetric(name) {
     }
 
     // IPv4 / hostname + port.
-    // The backend stores address and port separately.
     const separator =
         endpoint.lastIndexOf(":");
 
@@ -703,61 +721,119 @@ function saveModbusMetric(name) {
     const metric = {
         enabled: true,
         name,
-        device_address: deviceAddress,
-        device_port: devicePort,
+        device: `${deviceAddress}:${devicePort}`,
         unit_id: unitID,
         address,
         function: $("f-function").value,
         type: $("f-type").value,
+        poll_interval: pollInterval,
         offset: Number($("f-offset").value) || 0
     };
 
-    const controllerIndex =
-        editing?.controllerIndex ?? 0;
+    if (metric.type === "float32") {
+        metric.byte_order =
+            $("f-byte-order").value || "ABCD";
 
-    const controller =
-        cfg.modbus.controllers[controllerIndex];
-
-    if (!controller) {
-        alert("Modbus configuration error");
-        return false;
-    }
-
-    if (!controller.registers) {
-        controller.registers = [];
+        metric.word_order =
+            $("f-word-order").value || "AB";
     }
 
     if (editing && editing.kind === "modbus") {
 
         const old =
-            controller.registers[editing.index];
+            cfg.modbus.registers[editing.index];
 
         metric.enabled =
             old?.enabled !== false;
 
-        // Preserve existing labels from older configurations.
+        // Preserve existing labels.
         if (old?.labels) {
             metric.labels = old.labels;
         }
 
-        // Preserve hidden compatibility fields.
-        metric.byte_order =
-            old?.byte_order || "big";
-
-        metric.word_order =
-            old?.word_order || "big";
-
-        controller.registers[editing.index] =
+        cfg.modbus.registers[editing.index] =
             metric;
 
     } else {
 
-        controller.registers.push(metric);
+        cfg.modbus.registers.push(metric);
     }
 
     return true;
 }
 
+function parseDurationMilliseconds(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const match = value.trim().match(/^(\d+(?:\.\d+)?)(ms|s|m)$/);
+
+    if (!match) {
+        return null;
+    }
+
+    const multiplier = {
+        ms: 1,
+        s: 1000,
+        m: 60000
+    }[match[2]];
+
+    return Number(match[1]) * multiplier;
+}
+
+function setPollInterval(value) {
+    const input = $("f-poll-interval");
+    const unit = $("f-poll-unit");
+
+    if (!input || !unit) {
+        return;
+    }
+
+    const milliseconds = parseDurationMilliseconds(value) ?? 5000;
+
+    if (milliseconds < 60000 && milliseconds % 1 === 0) {
+        input.value = milliseconds;
+        unit.value = "ms";
+    } else if (milliseconds % 60000 === 0) {
+        input.value = milliseconds / 60000;
+        unit.value = "m";
+    } else if (milliseconds % 1000 === 0) {
+        input.value = milliseconds / 1000;
+        unit.value = "s";
+    } else {
+        input.value = milliseconds;
+        unit.value = "ms";
+    }
+}
+
+function readPollInterval() {
+    const input = $("f-poll-interval");
+    const unit = $("f-poll-unit");
+    const value = Number(input.value);
+
+    if (!Number.isFinite(value) || value <= 0 || !Number.isInteger(value)) {
+        alert("Poll Interval must be a positive whole number.");
+        return null;
+    }
+
+    const multiplier = {
+        ms: 1,
+        s: 1000,
+        m: 60000
+    }[unit.value];
+
+    const milliseconds = value * multiplier;
+
+    if (!Number.isSafeInteger(milliseconds) ||
+        milliseconds < 1 ||
+        milliseconds > 3600000) {
+        alert("Poll Interval must be between 1 millisecond and 60 minutes.");
+        return null;
+    }
+
+    return `${value}${unit.value}`;
+}
 
 function inputField(label, id, value) {
 

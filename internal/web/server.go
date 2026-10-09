@@ -439,30 +439,13 @@ func (s *Server) config(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) registers(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "use PUT /api/config to update registers", http.StatusMethodNotAllowed)
-		return
-	}
+        if r.Method != http.MethodGet {
+                http.Error(w, "use PUT /api/config to update registers", http.StatusMethodNotAllowed)
+                return
+        }
 
-	c := s.store.Get()
-
-	type row struct {
-		Controller string `json:"controller"`
-		config.Register
-	}
-
-	var out []row
-
-	for _, p := range c.Modbus.Controllers {
-		for _, reg := range p.Registers {
-			out = append(out, row{
-				Controller: p.Name,
-				Register:   reg,
-			})
-		}
-	}
-
-	s.json(w, out)
+        c := s.store.Get()
+        s.json(w, c.Modbus.Registers)
 }
 
 func (s *Server) systemMetrics(w http.ResponseWriter, r *http.Request) {

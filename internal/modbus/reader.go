@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"net"
-	"strconv"
 	"time"
 
 	goburrow "github.com/goburrow/modbus"
@@ -28,180 +26,137 @@ type MetricError struct {
 }
 
 type Reader struct {
-	cfg     config.Controller
-	timeout time.Duration
-	retries int
+        cfg     config.Register
+        timeout time.Duration
+        retries int
 }
 
-func NewReader(cfg config.Controller, timeout time.Duration, retries int) *Reader {
-	return &Reader{
-		cfg:     cfg,
-		timeout: timeout,
-		retries: retries,
-	}
+func NewReader(cfg config.Register, timeout time.Duration, retries int) *Reader {
+        return &Reader{
+                cfg:     cfg,
+                timeout: timeout,
+                retries: retries,
+        }
 }
 
 func (r *Reader) Read(ctx context.Context) ([]MetricResult, []MetricError) {
-	results := make([]MetricResult, 0, len(r.cfg.Registers))
-	errors := make([]MetricError, 0)
+        results := make([]MetricResult, 0, 1)
+        errors := make([]MetricError, 0, 1)
 
-	clients := make(map[string]goburrow.Client)
+        if !r.cfg.Enabled {
+                return results, errors
+        }
 
-	for i, reg := range r.cfg.Registers {
-		if !reg.Enabled {
-			continue
-		}
+        handler := goburrow.NewTCPClientHandler(r.cfg.Device)
+        handler.Timeout = r.timeout
+        handler.SlaveId = r.cfg.UnitID
 
-		select {
-		case <-ctx.Done():
-			errors = append(errors, MetricError{
-				Index:   i,
-				Name:    reg.Name,
-				Address: reg.Address,
-				Err:     ctx.Err(),
-			})
-			return results, errors
-		default:
-		}
+        client := goburrow.NewClient(handler)
 
-		// Each metric may have its own Modbus TCP device.
-		// Empty fields keep backward compatibility with the old
-		// controller-based configuration.
-		deviceAddress := reg.DeviceAddress
-		devicePort := reg.DevicePort
-		unitID := reg.UnitID
+        select {
+        case <-ctx.Done():
+                errors = append(errors, MetricError{
+                        Index:   0,
+                        Name:    r.cfg.Name,
+                        Address: r.cfg.Address,
+                        Err:     ctx.Err(),
+                })
+                return results, errors
+        default:
+        }
 
-		if deviceAddress == "" {
-			deviceAddress = r.cfg.Address
+        var (
+                data  []byte
+                err   error
+                words uint16 = 1
+        )
 
-			// Legacy controller configuration may contain host:port.
-			// Split it so we do not construct host:port:port.
-			if host, port, err := net.SplitHostPort(r.cfg.Address); err == nil {
-				deviceAddress = host
+        switch r.cfg.Type {
+        case "uint32", "int32", "float32":
+                words = 2
+        }
 
-				if devicePort == 0 {
-					if parsedPort, err := strconv.ParseUint(port, 10, 16); err == nil {
-						devicePort = uint16(parsedPort)
-					}
-				}
-			}
-		}
+        for attempt := 0; attempt <= r.retries; attempt++ {
+                select {
+                case <-ctx.Done():
+                        err = ctx.Err()
+                default:
+                        if r.cfg.Function == "input" {
+                                data, err = client.ReadInputRegisters(
+                                        modbusOffset(r.cfg.Address),
+                                        words,
+                                )
+                        } else {
+                                data, err = client.ReadHoldingRegisters(
+                                        modbusOffset(r.cfg.Address),
+                                        words,
+                                )
+                        }
+                }
 
-		if devicePort == 0 {
-			devicePort = 502
-		}
+                if err == nil {
+                        break
+                }
+        }
 
-		if unitID == 0 {
-			unitID = r.cfg.UnitID
-		}
+        if err != nil {
+                errors = append(errors, MetricError{
+                        Index:   0,
+                        Name:    r.cfg.Name,
+                        Address: r.cfg.Address,
+                        Err: fmt.Errorf(
+                                "%s unit %d: %w",
+                                r.cfg.Device,
+                                r.cfg.UnitID,
+                                err,
+                        ),
+                })
+                return results, errors
+        }
 
-		endpoint := fmt.Sprintf("%s:%d", deviceAddress, devicePort)
-		clientKey := fmt.Sprintf("%s/%d", endpoint, unitID)
+        value, err := decode(
+                data,
+                r.cfg.Type,
+                r.cfg.ByteOrder,
+                r.cfg.WordOrder,
+        )
+        if err != nil {
+                errors = append(errors, MetricError{
+                        Index:   0,
+                        Name:    r.cfg.Name,
+                        Address: r.cfg.Address,
+                        Err:     err,
+                })
+                return results, errors
+        }
 
-		client, ok := clients[clientKey]
+        scale := r.cfg.Scale
+        if scale == 0 {
+                scale = 1
+        }
 
-		if !ok {
-			handler := goburrow.NewTCPClientHandler(endpoint)
-			handler.Timeout = r.timeout
-			handler.SlaveId = unitID
+        value = value*scale + r.cfg.Offset
 
-			client = goburrow.NewClient(handler)
-			clients[clientKey] = client
-		}
+        labels := make([]metric.Label, 0, len(r.cfg.Labels))
 
-		var (
-			data  []byte
-			err   error
-			words uint16 = 1
-		)
+        for k, v := range r.cfg.Labels {
+                labels = append(labels, metric.Label{
+                        Name:  k,
+                        Value: v,
+                })
+        }
 
-		switch reg.Type {
-		case "uint32", "int32", "float32":
-			words = 2
-		}
+        results = append(results, MetricResult{
+                Index: 0,
+                Sample: metric.Sample{
+                        Name:      r.cfg.Name,
+                        Labels:    labels,
+                        Value:     value,
+                        Timestamp: time.Now().UnixMilli(),
+                },
+        })
 
-		for attempt := 0; attempt <= r.retries; attempt++ {
-			select {
-			case <-ctx.Done():
-				err = ctx.Err()
-			default:
-				if reg.Function == "input" {
-					data, err = client.ReadInputRegisters(
-						modbusOffset(reg.Address),
-						words,
-					)
-				} else {
-					data, err = client.ReadHoldingRegisters(
-						modbusOffset(reg.Address),
-						words,
-					)
-				}
-			}
-
-			if err == nil {
-				break
-			}
-		}
-
-		if err != nil {
-			errors = append(errors, MetricError{
-				Index:   i,
-				Name:    reg.Name,
-				Address: reg.Address,
-				Err: fmt.Errorf(
-					"%s unit %d: %w",
-					endpoint,
-					unitID,
-					err,
-				),
-			})
-			continue
-		}
-
-		value, err := decode(data, reg.Type)
-		if err != nil {
-			errors = append(errors, MetricError{
-				Index:   i,
-				Name:    reg.Name,
-				Address: reg.Address,
-				Err:     err,
-			})
-			continue
-		}
-
-		scale := reg.Scale
-		if scale == 0 {
-			scale = 1
-		}
-
-		value = value*scale + reg.Offset
-
-		labels := make([]metric.Label, 0, len(reg.Labels)+1)
-
-		labels = append(labels, metric.Label{
-			Name:  "plc",
-			Value: r.cfg.Name,
-		})
-
-		for k, v := range reg.Labels {
-			labels = append(labels, metric.Label{
-				Name:  k,
-				Value: v,
-			})
-		}
-
-		results = append(results, MetricResult{
-			Index: i,
-			Sample: metric.Sample{
-				Name:      reg.Name,
-				Labels:    labels,
-				Value:     value,
-				Timestamp: time.Now().UnixMilli(),
-			},
-		})
-	}
-
-	return results, errors
+        return results, errors
 }
 
 func modbusOffset(address uint16) uint16 {
@@ -212,7 +167,7 @@ func modbusOffset(address uint16) uint16 {
 	return address
 }
 
-func decode(b []byte, typ string) (float64, error) {
+func decode(b []byte, typ, byteOrder, wordOrder string) (float64, error) {
 	if len(b) < 2 {
 		return 0, fmt.Errorf("short response")
 	}
@@ -229,25 +184,53 @@ func decode(b []byte, typ string) (float64, error) {
 			return 0, fmt.Errorf("short response")
 		}
 
-		return float64(int32(binary.BigEndian.Uint32(b))), nil
+		return float64(decodeUint32(b, byteOrder, wordOrder)), nil
 
 	case "uint32":
 		if len(b) < 4 {
 			return 0, fmt.Errorf("short response")
 		}
 
-		return float64(uint32(binary.BigEndian.Uint32(b))), nil
+		return float64(decodeUint32(b, byteOrder, wordOrder)), nil
 
 	case "float32":
 		if len(b) < 4 {
 			return 0, fmt.Errorf("short response")
 		}
 
-		return float64(
-			math.Float32frombits(binary.BigEndian.Uint32(b)),
-		), nil
+		bits := decodeUint32(b, byteOrder, wordOrder)
+		return float64(math.Float32frombits(bits)), nil
 
 	default:
 		return 0, fmt.Errorf("unsupported type %q", typ)
 	}
+}
+
+func decodeUint32(b []byte, byteOrder, wordOrder string) uint32 {
+	if byteOrder == "" {
+		byteOrder = "ABCD"
+	}
+	if wordOrder == "" {
+		wordOrder = "AB"
+	}
+
+	var x [4]byte
+
+	x[0], x[1], x[2], x[3] = b[0], b[1], b[2], b[3]
+
+	switch wordOrder {
+	case "BA":
+		x[0], x[1], x[2], x[3] = x[2], x[3], x[0], x[1]
+	}
+
+	switch byteOrder {
+	case "BADC":
+		x[0], x[1], x[2], x[3] = x[1], x[0], x[3], x[2]
+	case "CDAB":
+		x[0], x[1], x[2], x[3] = x[2], x[3], x[0], x[1]
+	case "DCBA":
+		x[0], x[1], x[2], x[3] = x[3], x[2], x[1], x[0]
+	}
+
+	return binary.BigEndian.Uint32(x[:])
 }

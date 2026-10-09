@@ -10,4 +10,9 @@ if [ ! -f "$CONFIG" ]; then
     chmod 600 "$CONFIG"
 fi
 
-exec "$SNAP/bin/vmcollector" -config="$CONFIG"
+if [ "$#" -ne 1 ]; then
+    echo "Usage: snap run vmcollector.set-port <port>" >&2
+    exit 1
+fi
+
+exec "$SNAP/bin/vmcollector" -config="$CONFIG" -set-port="$1"
