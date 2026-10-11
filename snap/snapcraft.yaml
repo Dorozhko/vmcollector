@@ -1,7 +1,7 @@
 name: vmcollector
 title: VM Collector
 base: core24
-version: '0.1.0'
+version: '0.1.1'
 summary: Lightweight Modbus TCP collector for VictoriaMetrics
 description: |
   Lightweight Go Modbus TCP collector with direct VictoriaMetrics Remote Write output.
@@ -48,10 +48,10 @@ parts:
 
       case "$CRAFT_ARCH_BUILD_FOR" in
         riscv64)
-          BINARY_URL="https://github.com/Dorozhko/vmcollector/releases/download/v0.1.0/vmcollector-linux-riscv64"
+          BINARY_URL="https://github.com/Dorozhko/vmcollector/releases/download/v0.1.1/vmcollector-riscv64"
           ;;
         arm64)
-          BINARY_URL="https://github.com/Dorozhko/vmcollector/releases/download/v0.1.0/vmcollector-linux-arm64"
+          BINARY_URL="https://github.com/Dorozhko/vmcollector/releases/download/v0.1.1/vmcollector-arm64"
           ;;
         *)
           echo "Unsupported target architecture: $CRAFT_ARCH_BUILD_FOR" >&2

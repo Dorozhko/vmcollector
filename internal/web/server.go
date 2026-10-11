@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,6 +30,9 @@ type LogEntry struct {
 
 type Server struct {
 	store *config.Store
+
+	wsMu      sync.RWMutex
+	wsClients map[*wsClient]struct{}
 
 	lastSamples atomic.Int64
 	lastError   atomic.Value
@@ -90,7 +95,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) SetVMStatus(status string) {
 	switch status {
-	case "Connected", "Error", "Waiting", "Disabled":
+	case "Connected", "Disconnected", "Error", "Waiting", "Disabled":
 	default:
 		status = "Disabled"
 	}
@@ -200,6 +205,8 @@ func (s *Server) Handler() http.Handler {
 
 	// Protected API.
 	mux.HandleFunc("/api/status", s.status)
+	mux.HandleFunc("/api/vm-health", s.vmHealth)
+	// WebSocket is served on its own listener.
 	mux.HandleFunc("/api/session/heartbeat", s.heartbeat)
 	mux.HandleFunc("/api/metric-status", s.metricStatusAPI)
 	mux.HandleFunc("/api/logs", s.logsAPI)
@@ -235,7 +242,16 @@ func (s *Server) Handler() http.Handler {
 		http.FileServer(http.FS(assets)).ServeHTTP(w, r)
 	})
 
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") &&
+			r.URL.Path != "/api/login" &&
+			r.URL.Path != "/api/logout" &&
+			!s.isAuthenticated(r) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
@@ -350,10 +366,54 @@ func (s *Server) isAuthenticated(r *http.Request) bool {
 	return true
 }
 
+func (s *Server) vmHealth(w http.ResponseWriter, r *http.Request) {
+	if !s.isAuthenticated(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg := s.store.Get()
+	status := "Disabled"
+
+	if cfg.Output.VictoriaMetrics.Enabled {
+		status = "Disconnected"
+		address := strings.TrimSpace(cfg.Output.VictoriaMetrics.Address)
+
+		if address != "" {
+			if !strings.Contains(address, "://") {
+				address = "http://" + address
+			}
+			u, err := url.Parse(address)
+			if err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+				u.Path = strings.TrimRight(u.Path, "/") + "/health"
+				u.RawQuery = ""
+				u.Fragment = ""
+
+				client := &http.Client{Timeout: 2 * time.Second}
+				resp, err := client.Get(u.String())
+				if err == nil {
+					_ = resp.Body.Close()
+					if resp.StatusCode == http.StatusOK {
+						status = "Connected"
+					}
+				}
+			}
+		}
+	}
+
+	s.SetVMStatus(status)
+	s.json(w, map[string]string{"status": status})
+}
+
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	running := s.running
 	errorCount := s.errorCount
+	vmStatus := s.vmStatus
 	s.mu.RUnlock()
 
 	status := "stopped"
@@ -364,6 +424,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 
 	s.json(w, map[string]any{
 		"status":             status,
+		"vm_status":          vmStatus,
 		"last_samples":       s.lastSamples.Load(),
 		"last_error":         s.lastError.Load(),
 		"error_count":        errorCount,
@@ -439,13 +500,13 @@ func (s *Server) config(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) registers(w http.ResponseWriter, r *http.Request) {
-        if r.Method != http.MethodGet {
-                http.Error(w, "use PUT /api/config to update registers", http.StatusMethodNotAllowed)
-                return
-        }
+	if r.Method != http.MethodGet {
+		http.Error(w, "use PUT /api/config to update registers", http.StatusMethodNotAllowed)
+		return
+	}
 
-        c := s.store.Get()
-        s.json(w, c.Modbus.Registers)
+	c := s.store.Get()
+	s.json(w, c.Modbus.Registers)
 }
 
 func (s *Server) systemMetrics(w http.ResponseWriter, r *http.Request) {

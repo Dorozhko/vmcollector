@@ -31,6 +31,14 @@ func modbusMetricKey(controller string, index int) string {
 	return fmt.Sprintf("modbus:%s:%d", controller, index)
 }
 
+func metricVMEnabled(enabled *bool) bool {
+	return enabled == nil || *enabled
+}
+
+func metricWSEnabled(enabled bool) bool {
+	return enabled
+}
+
 func main() {
 	configPath := flag.String("config", "config.json", "JSON configuration file")
 	setAdminPassword := flag.Bool("set-admin-password", false, "Set admin password and exit")
@@ -121,6 +129,7 @@ func main() {
 
 	store := config.NewStore(*configPath, cfg)
 	ws := web.New(store)
+	go ws.RunWebSocket(ctx)
 
 	if cfg.Web.Listen != "" {
 		go func() {
@@ -160,88 +169,89 @@ func main() {
 			)
 
 			if err != nil {
-				ws.SetVMStatus("Error")
 				ws.SetError(err)
 				log.Printf("victoriametrics: %v", err)
 			} else {
 				rw = client
-				ws.SetVMStatus("Waiting")
 			}
-		} else {
-			ws.SetVMStatus("Disabled")
+
 		}
 
 		// ------------------------------------------------------------
 		// Modbus TCP
 
-                for i, reg := range current.Modbus.Registers {
-                        key := modbusMetricKey(reg.Name, i)
+		for i, reg := range current.Modbus.Registers {
+			key := modbusMetricKey(reg.Name, i)
 
-                        if !reg.Enabled {
-                                ws.SetMetricStatus(key, "OFF")
-                                continue
-                        }
+			if !reg.Enabled {
+				ws.SetMetricStatus(key, "OFF")
+				continue
+			}
 
-                        if !modbusSelected[i] {
-                                continue
-                        }
+			if !modbusSelected[i] {
+				continue
+			}
 
-                        reader := modbus.NewReader(
-                                reg,
-                                currentTimeout,
-                                current.Collector.Retries,
-                        )
+			reader := modbus.NewReader(
+				reg,
+				currentTimeout,
+				current.Collector.Retries,
+			)
 
-                        results, metricErrors := reader.Read(ctx)
+			results, metricErrors := reader.Read(ctx)
 
-                        for _, result := range results {
-                                ws.SetMetricStatus(
-                                        modbusMetricKey(reg.Name, result.Index),
-                                        "OK",
-                                )
-                        }
+			for _, result := range results {
+				ws.SetMetricStatus(
+					modbusMetricKey(reg.Name, result.Index),
+					"OK",
+				)
+			}
 
-                        for _, me := range metricErrors {
-                                ws.SetMetricStatus(
-                                        modbusMetricKey(reg.Name, me.Index),
-                                        "ERROR",
-                                )
+			for _, me := range metricErrors {
+				ws.SetMetricStatus(
+					modbusMetricKey(reg.Name, me.Index),
+					"ERROR",
+				)
 
-                                err := fmt.Errorf(
-                                        "modbus %s metric %s @ %d: %w",
-                                        reg.Device,
-                                        me.Name,
-                                        me.Address,
-                                        me.Err,
-                                )
+				err := fmt.Errorf(
+					"modbus %s metric %s @ %d: %w",
+					reg.Device,
+					me.Name,
+					me.Address,
+					me.Err,
+				)
 
-                                ws.SetError(err)
-                                log.Printf("modbus: %v", err)
-                        }
+				ws.SetError(err)
+				log.Printf("modbus: %v", err)
+			}
 
-                        samples := make([]metric.Sample, 0, len(results))
+			vmSamples := make([]metric.Sample, 0, len(results))
+			wsSamples := make([]metric.Sample, 0, len(results))
 
-                        for _, result := range results {
-                                samples = append(samples, result.Sample)
-                        }
+			for _, result := range results {
+				if metricVMEnabled(reg.VictoriaMetricsEnabled) {
+					vmSamples = append(vmSamples, result.Sample)
+				}
+				if metricWSEnabled(reg.WebSocketEnabled) {
+					wsSamples = append(wsSamples, result.Sample)
+				}
+			}
 
-                        allSamples += len(samples)
+			allSamples += len(results)
+			ws.PublishWebSocket(wsSamples)
 
-                        if rw != nil && len(samples) > 0 {
-                                if e := rw.Write(ctx, samples); e != nil {
-                                        ws.SetError(e)
-                                        log.Printf("victoriametrics: %v", e)
-                                } else {
-                                        log.Printf(
-                                                "sent %d samples from %s",
-                                                len(samples),
-                                                reg.Name,
-                                        )
-                                }
-                        }
-                }
+			if rw != nil && len(vmSamples) > 0 {
+				if e := rw.Write(ctx, vmSamples); e != nil {
+					ws.SetError(e)
+					log.Printf("victoriametrics: %v", e)
+				} else {
+					log.Printf("sent %d samples from %s", len(vmSamples), reg.Name)
+				}
+			}
 
-                // System metrics
+		}
+
+		// System metrics
 		// ------------------------------------------------------------
 
 		for i, m := range current.System.Metrics {
@@ -252,23 +262,30 @@ func main() {
 			}
 		}
 
-                systemResults, metricErrors := sysCollector.ReadSelected(
-                        ctx,
-                        systemSelected,
-                )
-systemSamples := make([]metric.Sample, 0, len(systemResults))
+		systemResults, metricErrors := sysCollector.ReadSelected(
+			ctx,
+			systemSelected,
+		)
+		vmSystemSamples := make([]metric.Sample, 0, len(systemResults))
+		wsSystemSamples := make([]metric.Sample, 0, len(systemResults))
 
 		for _, result := range systemResults {
-			ws.SetMetricStatus(
-				systemMetricKey(result.Index),
-				"OK",
-			)
+			ws.SetMetricStatus(systemMetricKey(result.Index), "OK")
 
-			systemSamples = append(
-				systemSamples,
-				result.Sample,
-			)
+			if result.Index < 0 || result.Index >= len(current.System.Metrics) {
+				continue
+			}
+			m := current.System.Metrics[result.Index]
+
+			if metricVMEnabled(m.VictoriaMetricsEnabled) {
+				vmSystemSamples = append(vmSystemSamples, result.Sample)
+			}
+			if metricWSEnabled(m.WebSocketEnabled) {
+				wsSystemSamples = append(wsSystemSamples, result.Sample)
+			}
 		}
+
+		ws.PublishWebSocket(wsSystemSamples)
 
 		for _, me := range metricErrors {
 			ws.SetMetricStatus(
@@ -286,17 +303,14 @@ systemSamples := make([]metric.Sample, 0, len(systemResults))
 			log.Printf("system: %v", err)
 		}
 
-		allSamples += len(systemSamples)
+		allSamples += len(systemResults)
 
-		if rw != nil && len(systemSamples) > 0 {
-			if e := rw.Write(ctx, systemSamples); e != nil {
+		if rw != nil && len(vmSystemSamples) > 0 {
+			if e := rw.Write(ctx, vmSystemSamples); e != nil {
 				ws.SetError(e)
 				log.Printf("victoriametrics: %v", e)
 			} else {
-				log.Printf(
-					"sent %d system samples",
-					len(systemSamples),
-				)
+				log.Printf("sent %d system samples", len(vmSystemSamples))
 			}
 		}
 
@@ -306,30 +320,30 @@ systemSamples := make([]metric.Sample, 0, len(systemResults))
 			rw.Close()
 		}
 	}
-        for {
-                if ctx.Err() != nil {
-                        return
-                }
+	for {
+		if ctx.Err() != nil {
+			return
+		}
 
-                current := store.Get()
-                now := time.Now()
+		current := store.Get()
+		now := time.Now()
 
-                modbusSelected, systemSelected := scheduler.selectMetrics(
-                        current,
-                        now,
-                )
+		modbusSelected, systemSelected := scheduler.selectMetrics(
+			current,
+			now,
+		)
 
-                if len(modbusSelected) > 0 || len(systemSelected) > 0 {
-                        run(modbusSelected, systemSelected)
-                }
+		if len(modbusSelected) > 0 || len(systemSelected) > 0 {
+			run(modbusSelected, systemSelected)
+		}
 
-                timer := time.NewTimer(scheduler.nextDelay(time.Now()))
+		timer := time.NewTimer(scheduler.nextDelay(time.Now()))
 
-                select {
-                case <-ctx.Done():
-                        timer.Stop()
-                        return
-                case <-timer.C:
-                }
-        }
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 }

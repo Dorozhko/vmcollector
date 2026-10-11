@@ -30,6 +30,10 @@ async function load() {
         if (!cfg.output.victoriametrics) cfg.output.victoriametrics = {};
         if (!cfg.output.victoriametrics.address) cfg.output.victoriametrics.address = "http://127.0.0.1:8428";
         if (typeof cfg.output.victoriametrics.enabled !== "boolean") cfg.output.victoriametrics.enabled = true;
+        if (!cfg.output.websocket) cfg.output.websocket = {};
+        if (typeof cfg.output.websocket.enabled !== "boolean") cfg.output.websocket.enabled = false;
+        if (!Number.isInteger(Number(cfg.output.websocket.port)) || Number(cfg.output.websocket.port) < 1 || Number(cfg.output.websocket.port) > 65535) cfg.output.websocket.port = 8889;
+        else cfg.output.websocket.port = Number(cfg.output.websocket.port);
 
         if (!cfg.system) {
             cfg.system = {
@@ -44,6 +48,7 @@ async function load() {
         }
 
         render();
+        startWebSocket();
     } catch (e) {
         showError(e.message);
     }
@@ -80,6 +85,12 @@ function render() {
     const vm = cfg.output?.victoriametrics || {};
     if ($("vm-address")) $("vm-address").value = vm.address || "";
     if ($("vm-toggle")) $("vm-toggle").checked = vm.enabled !== false;
+
+    const ws = cfg.output?.websocket || {};
+    if ($("ws-port")) $("ws-port").value = ws.port || 8889;
+    if ($("ws-toggle")) $("ws-toggle").checked = ws.enabled === true;
+    if ($("ws-token")) $("ws-token").value = ws.token || "";
+    renderWSStatus(ws.enabled === true);
 }
 
 function statusText(key, enabled) {
@@ -120,7 +131,7 @@ function renderMetrics() {
     if (!metrics.length) {
         rows.innerHTML = `
             <tr>
-                <td colspan="7" class="empty">
+                <td colspan="9" class="empty">
                     No metrics configured
                 </td>
             </tr>
@@ -131,6 +142,8 @@ function renderMetrics() {
     rows.innerHTML = metrics.map((m, i) => {
 
         const enabled = m.enabled !== false;
+        const vmEnabled = m.victoriametrics_enabled !== false;
+        const wsEnabled = m.websocket_enabled === true;
 
         const source =
             m._kind === "modbus"
@@ -159,6 +172,24 @@ function renderMetrics() {
                         <span></span>
                         ${statusText(m.key, enabled)}
                     </span>
+                </td>
+
+                <td>
+                    <input
+                        type="checkbox"
+                        aria-label="VictoriaMetrics output for ${esc(m.name)}"
+                        ${vmEnabled ? "checked" : ""}
+                        onchange="toggleMetricOutput(${i}, 'victoriametrics_enabled', this.checked)"
+                    >
+                </td>
+
+                <td>
+                    <input
+                        type="checkbox"
+                        aria-label="WebSocket output for ${esc(m.name)}"
+                        ${wsEnabled ? "checked" : ""}
+                        onchange="toggleMetricOutput(${i}, 'websocket_enabled', this.checked)"
+                    >
                 </td>
 
                 <td class="metric-name">
@@ -225,6 +256,24 @@ function toggleMetric(index, value) {
     }
 
     render();
+}
+
+function toggleMetricOutput(index, output, value) {
+    if (output !== "victoriametrics_enabled" && output !== "websocket_enabled") {
+        return;
+    }
+
+    const m = allMetrics()[index];
+    if (!m) return;
+
+    const target = m._kind === "system"
+        ? cfg.system.metrics[m._i]
+        : cfg.modbus.registers[m._i];
+
+    if (!target) return;
+
+    target[output] = value;
+    renderJSON();
 }
 
 function deleteMetric(index) {
@@ -607,6 +656,8 @@ function saveSystemMetric(name, source, pollInterval) {
 
     const metric = {
         enabled: true,
+        victoriametrics_enabled: true,
+        websocket_enabled: false,
         name,
         source,
         poll_interval: pollInterval
@@ -643,6 +694,10 @@ function saveSystemMetric(name, source, pollInterval) {
 
         metric.enabled =
             old.enabled !== false;
+        metric.victoriametrics_enabled =
+            old.victoriametrics_enabled !== false;
+        metric.websocket_enabled =
+            old.websocket_enabled === true;
 
         cfg.system.metrics[editing.index] = metric;
 
@@ -720,6 +775,8 @@ function saveModbusMetric(name, pollInterval) {
 
     const metric = {
         enabled: true,
+        victoriametrics_enabled: true,
+        websocket_enabled: false,
         name,
         device: `${deviceAddress}:${devicePort}`,
         unit_id: unitID,
@@ -745,6 +802,10 @@ function saveModbusMetric(name, pollInterval) {
 
         metric.enabled =
             old?.enabled !== false;
+        metric.victoriametrics_enabled =
+            old?.victoriametrics_enabled !== false;
+        metric.websocket_enabled =
+            old?.websocket_enabled === true;
 
         // Preserve existing labels.
         if (old?.labels) {
@@ -915,6 +976,24 @@ async function save() {
                 $("vm-toggle").checked;
         }
 
+        if (!parsed.output.websocket) parsed.output.websocket = {};
+
+        if ($("ws-port")) {
+            const port = Number($("ws-port").value);
+            if (!Number.isInteger(port) || port < 1 || port > 65535) {
+                alert("WebSocket port must be between 1 and 65535");
+                return;
+            }
+            parsed.output.websocket.port = port;
+        }
+
+        if ($("ws-toggle")) {
+            parsed.output.websocket.enabled = $("ws-toggle").checked;
+        }
+        if ($("ws-token")) {
+            parsed.output.websocket.token = $("ws-token").value.trim();
+        }
+
         delete parsed.output.victoriametrics.url;
         delete parsed.output.victoriametrics.protocol;
 
@@ -936,6 +1015,14 @@ async function save() {
         cfg = await response.json();
 
         render();
+        startWebSocket();
+
+        if (cfg.output?.victoriametrics?.enabled === false) {
+            renderVMStatus("Disabled");
+        } else {
+            renderVMStatus("Disconnected");
+            void checkVMHealth();
+        }
 
     } catch (e) {
 
@@ -980,6 +1067,190 @@ async function loadMetricStatuses() {
     }
 }
 
+let wsConnection = null;
+let wsReconnectTimer = null;
+let wsReconnectDelay = 1000;
+let wsGeneration = 0;
+let wsLastMessageAt = 0;
+let wsSampleCount = 0;
+
+function renderWSStatus(enabled) {
+    const text = $("ws-status-text");
+    if (!text) return;
+    text.textContent = enabled === true ? "On" : "Off";
+}
+
+function stopWebSocket() {
+    wsGeneration++;
+
+    if (wsReconnectTimer !== null) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
+
+    if (wsConnection !== null) {
+        const socket = wsConnection;
+        wsConnection = null;
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        if (socket.readyState < WebSocket.CLOSING) socket.close();
+    }
+}
+
+function startWebSocket() {
+    stopWebSocket();
+
+    const wsConfig = cfg.output?.websocket || {};
+    if (wsConfig.enabled !== true) {
+        renderWSStatus(false);
+        return;
+    }
+
+    const port = Number(wsConfig.port) || 8889;
+    const generation = wsGeneration;
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${scheme}//${location.hostname}:${port}/ws`;
+
+    renderWSStatus(true);
+
+    try {
+        const socket = new WebSocket(url);
+        wsConnection = socket;
+
+        socket.onopen = () => {
+            if (generation !== wsGeneration) return;
+            wsReconnectDelay = 1000;
+            renderWSStatus(true);
+        };
+
+        socket.onmessage = event => {
+            if (generation !== wsGeneration) return;
+            try {
+                const message = JSON.parse(event.data);
+                if (message.type !== "metrics" || !Array.isArray(message.samples)) return;
+
+                wsLastMessageAt = Date.now();
+                wsSampleCount = message.samples.length;
+
+                // Keep the latest WebSocket payload available for the UI/debug console.
+                state.websocketMetrics = message.samples;
+                window.dispatchEvent(new CustomEvent("vmcollector:websocket-metrics", {
+                    detail: message
+                }));
+            } catch (error) {
+                console.error("Invalid WebSocket metrics message", error);
+            }
+        };
+
+        socket.onerror = () => {
+            if (generation === wsGeneration) renderWSStatus(true);
+        };
+
+        socket.onclose = () => {
+            if (generation !== wsGeneration) return;
+            wsConnection = null;
+            renderWSStatus(true);
+            wsReconnectTimer = setTimeout(() => {
+                wsReconnectTimer = null;
+                startWebSocket();
+            }, wsReconnectDelay);
+            wsReconnectDelay = Math.min(wsReconnectDelay * 2, 15000);
+        };
+    } catch (error) {
+        renderWSStatus(true);
+        console.error("WebSocket connection failed", error);
+        wsReconnectTimer = setTimeout(startWebSocket, wsReconnectDelay);
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, 15000);
+    }
+}
+
+function renderVMStatus(status) {
+    const element = $("vm-status");
+    const text = $("vm-status-text");
+    if (!element || !text) return;
+
+    const normalized = ["Connected", "Disconnected", "Disabled"].includes(status)
+        ? status
+        : "Disconnected";
+
+    element.className = "vm-status " + normalized.toLowerCase();
+    text.textContent = normalized;
+}
+
+let vmHealthInFlight = false;
+let vmHealthTimer = null;
+let vmHealthController = null;
+
+async function checkVMHealth() {
+    if (document.hidden || vmHealthInFlight) return;
+
+    vmHealthInFlight = true;
+    vmHealthController = new AbortController();
+    const timeout = setTimeout(() => vmHealthController.abort(), 2000);
+
+    try {
+        const response = await fetch("/api/vm-health", {
+            cache: "no-store",
+            signal: vmHealthController.signal
+        });
+
+        if (!response.ok) {
+            renderVMStatus("Disconnected");
+            return;
+        }
+
+        const data = await response.json();
+        renderVMStatus(data.status);
+    } catch {
+        renderVMStatus("Disconnected");
+    } finally {
+        clearTimeout(timeout);
+        vmHealthController = null;
+        vmHealthInFlight = false;
+    }
+}
+
+function startVMHealthChecks() {
+    if (vmHealthTimer !== null || document.hidden) return;
+
+    const tick = async () => {
+        vmHealthTimer = null;
+        if (document.hidden) return;
+
+        await checkVMHealth();
+
+        if (!document.hidden) {
+            vmHealthTimer = setTimeout(tick, 1000);
+        }
+    };
+
+    void tick();
+}
+
+function stopVMHealthChecks() {
+    if (vmHealthTimer !== null) {
+        clearTimeout(vmHealthTimer);
+        vmHealthTimer = null;
+    }
+
+    if (vmHealthController) {
+        vmHealthController.abort();
+    }
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        stopVMHealthChecks();
+    } else {
+        startVMHealthChecks();
+    }
+});
+
+window.addEventListener("pagehide", stopVMHealthChecks);
+window.addEventListener("pageshow", startVMHealthChecks);
+
 async function updateStatus() {
 
     try {
@@ -1002,6 +1273,7 @@ async function updateStatus() {
 
         $("error-count").textContent =
             data.error_count ?? 0;
+
 
     } catch {
 
@@ -1146,15 +1418,11 @@ $("vm-toggle")?.addEventListener("change", () => {
 
     cfg.output.victoriametrics.enabled = enabled;
 
-    $("vm-toggle-label").textContent =
-        enabled ? "ON" : "OFF";
-
     if (!enabled) {
-        $("vm-status").className = "vm-status disabled";
-        $("vm-status-text").textContent = "Disabled";
+        renderVMStatus("Disabled");
     } else {
-        $("vm-status").className = "vm-status waiting";
-        $("vm-status-text").textContent = "Waiting";
+        renderVMStatus("Disconnected");
+        void checkVMHealth();
     }
 });
 
@@ -1168,6 +1436,48 @@ $("vm-toggle")?.addEventListener("change", () => {
     if (!cfg.output) cfg.output = {};
     if (!cfg.output.victoriametrics) cfg.output.victoriametrics = {};
     cfg.output.victoriametrics.enabled = $("vm-toggle").checked;
+});
+
+$("ws-port")?.addEventListener("input", () => {
+    if (!cfg.output) cfg.output = {};
+    if (!cfg.output.websocket) cfg.output.websocket = {};
+    const port = Number($("ws-port").value);
+    if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+        cfg.output.websocket.port = port;
+    }
+});
+
+$("ws-toggle")?.addEventListener("change", () => {
+    if (!cfg.output) cfg.output = {};
+    if (!cfg.output.websocket) cfg.output.websocket = {};
+    cfg.output.websocket.enabled = $("ws-toggle").checked;
+    renderWSStatus($("ws-toggle").checked);
+    startWebSocket();
+});
+
+$("ws-token-generate")?.addEventListener("click", () => {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    $("ws-token").value = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+});
+
+$("ws-token-visibility")?.addEventListener("click", () => {
+    const input = $("ws-token");
+    if (!input) return;
+    const visible = input.type === "password";
+    input.type = visible ? "text" : "password";
+    $("ws-token-visibility").textContent = visible ? "Hide" : "Show";
+});
+
+
+$("ws-token")?.addEventListener("input", () => {
+    if (!cfg.output) cfg.output = {};
+    if (!cfg.output.websocket) cfg.output.websocket = {};
+    cfg.output.websocket.token = $("ws-token").value;
+});
+
+$("ws-port")?.addEventListener("change", () => {
+    if ($("ws-toggle")?.checked) startWebSocket();
 });
 
 $("add").onclick =
@@ -1250,3 +1560,4 @@ load();
 updateStatus();
 loadLogs();
 loadMetricStatuses();
+startVMHealthChecks();

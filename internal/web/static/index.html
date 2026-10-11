@@ -53,6 +53,8 @@
                 <tr>
                     <th>On</th>
                     <th>Status</th>
+                    <th>VictoriaMetrics</th>
+                    <th>WebSocket</th>
                     <th>Name</th>
                     <th>Source</th>
                     <th>Metric</th>
@@ -96,10 +98,6 @@
                             <span class="vm-switch-slider"></span>
                         </label>
 
-                        <span id="vm-toggle-label" class="vm-toggle-text">
-                            OFF
-                        </span>
-
                         <span id="vm-status" class="vm-status disabled">
                             <span class="vm-status-dot"></span>
                             <span id="vm-status-text">Disabled</span>
@@ -108,6 +106,44 @@
                     </div>
                 </div>
 
+            </div>
+
+            <div class="vm-settings-form websocket-settings">
+                <div class="vm-field">
+                    <label for="ws-port">WebSocket port</label>
+                    <input
+                        id="ws-port"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        step="1"
+                        value="8889"
+                    >
+                </div>
+
+                <div class="vm-enabled-field">
+                    <label>WebSocket output</label>
+                    <div class="vm-connection-control">
+                        <label class="vm-switch">
+                            <input
+                                id="ws-toggle"
+                                class="vm-switch-input"
+                                type="checkbox"
+                            >
+                            <span class="vm-switch-slider"></span>
+                        </label>
+                        <span id="ws-status-text" class="ws-toggle-label">Off</span>
+                    </div>
+                </div>
+
+                <div class="vm-field ws-token-field">
+                    <label for="ws-token">Access token</label>
+                    <div class="ws-token-control">
+                        <input id="ws-token" type="password" autocomplete="off" placeholder="Generate or enter a token">
+                        <button id="ws-token-generate" type="button">Generate</button>
+                        <button id="ws-token-visibility" type="button">Show</button>
+                                            </div>
+                </div>
             </div>
         </div>
     </section>

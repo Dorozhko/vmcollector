@@ -840,6 +840,59 @@ textarea:focus {
 }
 
 
+/* VictoriaMetrics and WebSocket settings in one horizontal row */
+.vm-panel .vm-settings {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.vm-panel .vm-settings-form {
+    min-width: 0;
+    padding: 18px 24px 22px;
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 16px;
+}
+
+.vm-panel .websocket-settings {
+    grid-template-columns: minmax(100px, 1fr) 190px;
+}
+
+@media (max-width: 1050px) {
+    .vm-panel .vm-settings {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+@media (max-width: 700px) {
+    .vm-panel .vm-settings-form,
+    .vm-panel .websocket-settings {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Match WebSocket port input to the VictoriaMetrics address field */
+.vm-panel .websocket-settings input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 42px;
+    padding: 0 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+.vm-panel .websocket-settings input[type="number"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
 /* Victoria Metrics standalone integration panel */
 .vm-panel {
     overflow: hidden;
@@ -954,11 +1007,13 @@ textarea:focus {
     background: #22c55e !important;
 }
 
-.vm-status.error {
+.vm-status.error,
+.vm-status.disconnected {
     color: #dc2626 !important;
 }
 
-.vm-status.error .vm-status-dot {
+.vm-status.error .vm-status-dot,
+.vm-status.disconnected .vm-status-dot {
     background: #ef4444 !important;
 }
 
@@ -1068,4 +1123,86 @@ textarea:focus {
 .project-footer .github-link:hover {
     color: #9db1c7;
     opacity: 1;
+}
+
+/* WebSocket access token controls */
+.vm-panel .ws-token-field {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.vm-panel .ws-token-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+
+.vm-panel .ws-token-control input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 13px;
+}
+
+.vm-panel .ws-token-control input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.vm-panel .ws-token-control button {
+    min-height: 42px;
+    padding: 0 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.vm-panel .ws-token-control button:hover {
+    background: #f1f5f9;
+}
+
+.vm-panel .ws-toggle-label {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+@media (max-width: 700px) {
+    .vm-panel .ws-token-control {
+        grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    }
+
+    .vm-panel .ws-token-control input {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Compact WebSocket output switch */
+.vm-panel .websocket-settings .vm-connection-control {
+    min-height: 42px !important;
+    height: 42px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0 12px !important;
+    gap: 8px !important;
+    border-radius: 8px !important;
+}
+
+.vm-panel .websocket-settings .vm-enabled-field {
+    min-width: 0 !important;
 }

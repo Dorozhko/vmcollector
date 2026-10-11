@@ -27,19 +27,21 @@ type Modbus struct {
 	Registers []Register `json:"registers"`
 }
 type Register struct {
-	PollInterval string            `json:"poll_interval,omitempty"`
-	Enabled      bool              `json:"enabled"`
-	Name         string            `json:"name"`
-	Device       string            `json:"device"`
-	UnitID       byte              `json:"unit_id"`
-	Address      uint16            `json:"address"`
-	Function     string            `json:"function"`
-	Type         string            `json:"type"`
-	ByteOrder    string            `json:"byte_order,omitempty"`
-	WordOrder    string            `json:"word_order,omitempty"`
-	Labels       map[string]string `json:"labels,omitempty"`
-	Scale        float64           `json:"scale,omitempty"`
-	Offset       float64           `json:"offset,omitempty"`
+	PollInterval           string            `json:"poll_interval,omitempty"`
+	Enabled                bool              `json:"enabled"`
+	VictoriaMetricsEnabled *bool             `json:"victoriametrics_enabled,omitempty"`
+	WebSocketEnabled       bool              `json:"websocket_enabled,omitempty"`
+	Name                   string            `json:"name"`
+	Device                 string            `json:"device"`
+	UnitID                 byte              `json:"unit_id"`
+	Address                uint16            `json:"address"`
+	Function               string            `json:"function"`
+	Type                   string            `json:"type"`
+	ByteOrder              string            `json:"byte_order,omitempty"`
+	WordOrder              string            `json:"word_order,omitempty"`
+	Labels                 map[string]string `json:"labels,omitempty"`
+	Scale                  float64           `json:"scale,omitempty"`
+	Offset                 float64           `json:"offset,omitempty"`
 }
 
 type System struct {
@@ -48,18 +50,27 @@ type System struct {
 	Metrics      []SystemMetric `json:"metrics"`
 }
 type SystemMetric struct {
-	PollInterval string            `json:"poll_interval,omitempty"`
-	Enabled      bool              `json:"enabled"`
-	Name         string            `json:"name"`
-	Source       string            `json:"source"`
-	Metric       string            `json:"metric,omitempty"`
-	Path         string            `json:"path,omitempty"`
-	Scale        float64           `json:"scale,omitempty"`
-	Offset       float64           `json:"offset,omitempty"`
-	Labels       map[string]string `json:"labels,omitempty"`
+	PollInterval           string            `json:"poll_interval,omitempty"`
+	Enabled                bool              `json:"enabled"`
+	VictoriaMetricsEnabled *bool             `json:"victoriametrics_enabled,omitempty"`
+	WebSocketEnabled       bool              `json:"websocket_enabled,omitempty"`
+	Name                   string            `json:"name"`
+	Source                 string            `json:"source"`
+	Metric                 string            `json:"metric,omitempty"`
+	Path                   string            `json:"path,omitempty"`
+	Scale                  float64           `json:"scale,omitempty"`
+	Offset                 float64           `json:"offset,omitempty"`
+	Labels                 map[string]string `json:"labels,omitempty"`
 }
 type Output struct {
 	VictoriaMetrics VictoriaMetrics `json:"victoriametrics"`
+	WebSocket       WebSocket       `json:"websocket"`
+}
+
+type WebSocket struct {
+	Enabled bool   `json:"enabled"`
+	Port    int    `json:"port"`
+	Token   string `json:"token,omitempty"`
 }
 type VictoriaMetrics struct {
 	Address string `json:"address"`
@@ -115,6 +126,13 @@ func Save(path string, c *Config) error {
 }
 
 func (c *Config) Validate() error {
+	if c.Output.WebSocket.Port == 0 {
+		c.Output.WebSocket.Port = 8889
+	}
+	if c.Output.WebSocket.Port < 1 || c.Output.WebSocket.Port > 65535 {
+		return fmt.Errorf("output.websocket.port must be between 1 and 65535")
+	}
+
 	if c.Version == 0 {
 		c.Version = 1
 	}
