@@ -11,8 +11,9 @@ const $ = id => document.getElementById(id);
 
 const sourceNames = {
     cpu: "CPU",
-    memory: "Memory",
+    memory: "RAM Usage",
     storage: "Storage",
+    directory: "Directory",
     temperature: "Temperature",
     network: "Network",
     uptime: "Uptime",
@@ -150,10 +151,7 @@ function renderMetrics() {
                 ? "Modbus TCP"
                 : sourceNames[m.source] || m.source || "—";
 
-        const metric =
-            m.metric ||
-            m.type ||
-            "—";
+        const metric = displayMetricName(m);
 
         const details = metricDetails(m);
 
@@ -225,6 +223,40 @@ function renderMetrics() {
             </tr>
         `;
     }).join("");
+}
+
+function displayMetricName(m) {
+    if (m.source === "cpu") {
+        const names = {
+            usage: "CPU Usage (%)",
+            core_usage: "CPU Core Usage (%)",
+            core_frequency: "CPU Core Frequency (MHz)"
+        };
+        if (names[m.metric]) return names[m.metric];
+    }
+
+    if (m.source === "memory") {
+        if (m.metric === "used_mb") return "RAM Usage (MB)";
+        if (m.metric === "used_percent") return "RAM Usage (%)";
+    }
+
+    return m.metric || m.type || "—";
+}
+
+function memoryMetricName(metric) {
+    return metric === "used_mb"
+        ? "ram_used_mb"
+        : "ram_used_percent";
+}
+
+function cpuMetricName(metric) {
+    const names = {
+        usage: "cpu_usage_percent",
+        core_usage: "cpu_core_usage_percent",
+        core_frequency: "cpu_core_frequency_mhz"
+    };
+
+    return names[metric] || "cpu_usage_percent";
 }
 
 function metricDetails(m) {
@@ -330,6 +362,7 @@ function openEditor(m) {
 
     setPollInterval(m.poll_interval || "5s");
     renderDynamicFields(m);
+    updateMemoryNameField();
 
     const typeField = $("f-type");
 
@@ -367,9 +400,8 @@ function renderDynamicFields(m) {
                 "f-metric",
                 [
                     "usage",
-                    "load1",
-                    "load5",
-                    "load15"
+                    "core_usage",
+                    "core_frequency"
                 ],
                 m.metric || "usage"
             )}
@@ -384,13 +416,7 @@ function renderDynamicFields(m) {
             ${selectField(
                 "Metric",
                 "f-metric",
-                [
-                    "used",
-                    "available",
-                    "free",
-                    "total",
-                    "used_percent"
-                ],
+                ["used_mb", "used_percent"],
                 m.metric || "used_percent"
             )}
         `;
@@ -399,28 +425,37 @@ function renderDynamicFields(m) {
     }
 
     if (source === "storage") {
-
         container.innerHTML = `
-            ${inputField(
-                "Mount",
-                "f-path",
-                m.path || "/"
-            )}
-
+            ${inputField("Mount", "f-path", m.path || "/")}
             ${selectField(
                 "Metric",
                 "f-metric",
                 [
-                    "used",
-                    "free",
-                    "total",
+                    "used_mb",
+                    "used_gb",
+                    "available_mb",
+                    "available_gb",
+                    "total_mb",
+                    "total_gb",
                     "used_percent",
-                    "free_percent"
+                    "available_percent"
                 ],
                 m.metric || "used_percent"
             )}
         `;
+        return;
+    }
 
+    if (source === "directory") {
+        container.innerHTML = `
+            ${inputField("Directory Path", "f-path", m.path || "")}
+            ${selectField(
+                "Metric",
+                "f-metric",
+                ["size_mb", "size_gb"],
+                m.metric || "size_gb"
+            )}
+        `;
         return;
     }
 
@@ -499,27 +534,28 @@ function renderDynamicFields(m) {
     }
 
     if (source === "file") {
+        const isLegacyFile =
+            Object.keys(m || {}).length > 0 &&
+            !["size_mb", "size_gb"].includes(m.metric);
 
-        container.innerHTML = `
-            ${inputField(
-                "File Path",
-                "f-path",
-                m.path || ""
-            )}
-
-            ${numberField(
-                "Scale",
-                "f-scale",
-                m.scale ?? 1
-            )}
-
-            ${numberField(
-                "Offset",
-                "f-offset",
-                m.offset ?? 0
-            )}
-        `;
-
+        if (isLegacyFile) {
+            // Preserve the legacy file metric with its scale and offset.
+            container.innerHTML = `
+                ${inputField("File Path", "f-path", m.path || "")}
+                ${numberField("Scale", "f-scale", m.scale ?? 1)}
+                ${numberField("Offset", "f-offset", m.offset ?? 0)}
+            `;
+        } else {
+            container.innerHTML = `
+                ${inputField("File Path", "f-path", m.path || "")}
+                ${selectField(
+                    "Metric",
+                    "f-metric",
+                    ["size_mb", "size_gb"],
+                    m.metric || "size_mb"
+                )}
+            `;
+        }
         return;
     }
 
@@ -653,6 +689,22 @@ function saveMetric() {
 }
 
 function saveSystemMetric(name, source, pollInterval) {
+
+    const selectedMetric = $("f-metric")?.value;
+
+    if (source === "memory") {
+        name = memoryMetricName(selectedMetric);
+        $("f-name").value = name;
+    } else if (source === "cpu") {
+        name = cpuMetricName(selectedMetric);
+        $("f-name").value = name;
+    } else if (
+        ["storage", "directory"].includes(source) ||
+        (source === "file" && ["size_mb", "size_gb"].includes(selectedMetric))
+    ) {
+        name = `${source}_${selectedMetric}`;
+        $("f-name").value = name;
+    }
 
     const metric = {
         enabled: true,
@@ -1502,8 +1554,40 @@ $("modal-backdrop")?.addEventListener(
 
 $("f-source").addEventListener(
     "change",
-    () => renderDynamicFields({})
+    () => {
+        renderDynamicFields({});
+        updateMemoryNameField();
+    }
 );
+
+function updateMemoryNameField() {
+    const source = $("f-source").value;
+    const nameField = $("f-name");
+    const selectedMetric = $("f-metric")?.value;
+
+    if (source === "memory") {
+        nameField.value = memoryMetricName(selectedMetric);
+        nameField.readOnly = true;
+    } else if (source === "cpu") {
+        nameField.value = cpuMetricName(selectedMetric);
+        nameField.readOnly = true;
+    } else if (
+        ["storage", "directory"].includes(source) ||
+        (source === "file" && ["size_mb", "size_gb"].includes(selectedMetric))
+    ) {
+        nameField.value = `${source}_${selectedMetric}`;
+        nameField.readOnly = true;
+    } else {
+        nameField.readOnly = false;
+    }
+}
+
+$("dynamic-fields").addEventListener("change", event => {
+    if (event.target.id === "f-metric" &&
+        ["memory", "cpu", "storage", "directory", "file"].includes($("f-source").value)) {
+        updateMemoryNameField();
+    }
+});
 
 $("clear-logs")?.addEventListener(
     "click",

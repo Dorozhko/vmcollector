@@ -222,7 +222,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("system metric requires name and source")
 		}
 		switch m.Source {
-		case "cpu", "memory", "storage", "temperature", "network", "uptime", "file":
+		case "cpu", "memory", "storage", "directory", "temperature", "network", "uptime", "file":
 		default:
 			return fmt.Errorf("system metric %q: unsupported source %q", m.Name, m.Source)
 		}
