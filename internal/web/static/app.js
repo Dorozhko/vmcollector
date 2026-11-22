@@ -151,18 +151,30 @@ function renderMetrics() {
                 ? "Modbus TCP"
                 : sourceNames[m.source] || m.source || "—";
 
+        const sourceCategory =
+            m._kind === "modbus" || m.source === "modbus"
+                ? "modbus"
+                : ["storage", "directory", "file"].includes(m.source)
+                    ? "storage"
+                    : "system";
+
         const metric = displayMetricName(m);
 
         const details = metricDetails(m);
 
         return `
-            <tr>
+            <tr class="source-row-${sourceCategory}">
                 <td>
-                    <input
-                        type="checkbox"
-                        ${enabled ? "checked" : ""}
-                        onchange="toggleMetric(${i}, this.checked)"
-                    >
+                    <label class="metric-switch metric-switch--master" title="Enable metric">
+                        <input
+                            class="metric-switch-input"
+                            type="checkbox"
+                            ${enabled ? "checked" : ""}
+                            aria-label="Enable ${esc(m.name)}"
+                            onchange="toggleMetric(${i}, this.checked)"
+                        >
+                        <span class="metric-switch-slider"></span>
+                    </label>
                 </td>
 
                 <td>
@@ -173,21 +185,29 @@ function renderMetrics() {
                 </td>
 
                 <td>
-                    <input
-                        type="checkbox"
-                        aria-label="VictoriaMetrics output for ${esc(m.name)}"
-                        ${vmEnabled ? "checked" : ""}
-                        onchange="toggleMetricOutput(${i}, 'victoriametrics_enabled', this.checked)"
-                    >
+                    <label class="metric-switch" title="VictoriaMetrics output">
+                        <input
+                            class="metric-switch-input"
+                            type="checkbox"
+                            aria-label="VictoriaMetrics output for ${esc(m.name)}"
+                            ${vmEnabled ? "checked" : ""}
+                            onchange="toggleMetricOutput(${i}, 'victoriametrics_enabled', this.checked)"
+                        >
+                        <span class="metric-switch-slider"></span>
+                    </label>
                 </td>
 
                 <td>
-                    <input
-                        type="checkbox"
-                        aria-label="WebSocket output for ${esc(m.name)}"
-                        ${wsEnabled ? "checked" : ""}
-                        onchange="toggleMetricOutput(${i}, 'websocket_enabled', this.checked)"
-                    >
+                    <label class="metric-switch" title="WebSocket output">
+                        <input
+                            class="metric-switch-input"
+                            type="checkbox"
+                            aria-label="WebSocket output for ${esc(m.name)}"
+                            ${wsEnabled ? "checked" : ""}
+                            onchange="toggleMetricOutput(${i}, 'websocket_enabled', this.checked)"
+                        >
+                        <span class="metric-switch-slider"></span>
+                    </label>
                 </td>
 
                 <td class="metric-name">
@@ -195,7 +215,7 @@ function renderMetrics() {
                 </td>
 
                 <td>
-                    <span class="source-badge">
+                    <span class="source-badge source-${sourceCategory}">
                         ${esc(source)}
                     </span>
                 </td>
