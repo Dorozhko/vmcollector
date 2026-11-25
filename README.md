@@ -87,7 +87,7 @@ Replace `<COLLECTOR_IP>` with the IP address of the device running VM Collector.
 
 ```bash
 
-
+[![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/vmcollector)
 ## Architecture
 
  ┌──────────────────┐
