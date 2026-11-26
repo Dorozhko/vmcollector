@@ -84,7 +84,16 @@ function render() {
     renderJSON();
 
     const vm = cfg.output?.victoriametrics || {};
-    if ($("vm-address")) $("vm-address").value = vm.address || "";
+    let vmURL;
+
+    try {
+        vmURL = new URL(vm.address || "http://127.0.0.1:8428");
+    } catch {
+        vmURL = new URL("http://127.0.0.1:8428");
+    }
+
+    if ($("vm-host")) $("vm-host").value = vmURL.hostname.replace(/^\[|\]$/g, "");
+    if ($("vm-api-port")) $("vm-api-port").value = vmURL.port || "8428";
     if ($("vm-toggle")) $("vm-toggle").checked = vm.enabled !== false;
 
     const ws = cfg.output?.websocket || {};
@@ -1038,9 +1047,29 @@ async function save() {
             parsed.output.victoriametrics = {};
         }
 
-        if ($("vm-address")) {
+        if ($("vm-host") && $("vm-api-port")) {
+            const host = $("vm-host").value.trim();
+            const port = Number($("vm-api-port").value);
+
+            if (!Number.isInteger(port) || port < 1 || port > 65535) {
+                alert("VictoriaMetrics API port must be between 1 and 65535");
+                return;
+            }
+
+            if (!host) {
+                alert("VictoriaMetrics host is required");
+                return;
+            }
+
+            const previous = new URL(
+                parsed.output.victoriametrics.address || "http://127.0.0.1:8428"
+            );
+
+            previous.hostname = host;
+            previous.port = String(port);
+
             parsed.output.victoriametrics.address =
-                $("vm-address").value.trim();
+                previous.toString().replace(/\/$/, "");
         }
 
         if ($("vm-toggle")) {
@@ -1498,11 +1527,30 @@ $("vm-toggle")?.addEventListener("change", () => {
     }
 });
 
-$("vm-address")?.addEventListener("input", () => {
+function updateVMAddress() {
     if (!cfg.output) cfg.output = {};
     if (!cfg.output.victoriametrics) cfg.output.victoriametrics = {};
-    cfg.output.victoriametrics.address = $("vm-address").value.trim();
-});
+
+    const host = $("vm-host")?.value.trim();
+    const port = $("vm-api-port")?.value.trim();
+
+    if (!host || !port) return;
+
+    try {
+        const address = new URL(
+            cfg.output.victoriametrics.address || "http://127.0.0.1:8428"
+        );
+        address.hostname = host;
+        address.port = port;
+        cfg.output.victoriametrics.address =
+            address.toString().replace(/\/$/, "");
+    } catch {
+        // Invalid address will be reported when saving.
+    }
+}
+
+$("vm-host")?.addEventListener("input", updateVMAddress);
+$("vm-api-port")?.addEventListener("input", updateVMAddress);
 
 $("vm-toggle")?.addEventListener("change", () => {
     if (!cfg.output) cfg.output = {};
@@ -1665,3 +1713,301 @@ updateStatus();
 loadLogs();
 loadMetricStatuses();
 startVMHealthChecks();
+
+
+// ============================================================
+// ============================================================
+// VICTORIAMETRICS METRICS MANAGEMENT
+// ============================================================
+
+let vmMetrics = [];
+let vmMetricsFilter = "";
+let vmMetricPendingDelete = null;
+let vmMetricDeleteInProgress = false;
+
+function vmFormatTimestamp(value) {
+    const seconds = Number(value);
+
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+        return "—";
+    }
+
+    const date = new Date(seconds * 1000);
+
+    return Number.isNaN(date.getTime())
+        ? "—"
+        : date.toLocaleString();
+}
+
+function vmShowMessage(message, isError = false) {
+    const element = $("vm-metrics-message");
+    if (!element) return;
+
+    element.textContent = message;
+    element.classList.remove("hidden", "error");
+
+    if (isError) element.classList.add("error");
+}
+
+function vmHideMessage() {
+    $("vm-metrics-message")?.classList.add("hidden");
+}
+
+function vmShowDeleteError(message) {
+    const element = $("vm-delete-error");
+    if (!element) return;
+
+    element.textContent = message;
+    element.classList.remove("hidden");
+}
+
+function vmHideDeleteError() {
+    const element = $("vm-delete-error");
+    if (!element) return;
+
+    element.textContent = "";
+    element.classList.add("hidden");
+}
+
+async function vmReadError(response) {
+    const body = (await response.text()).trim();
+
+    if (!body) {
+        return `Request failed (HTTP ${response.status}).`;
+    }
+
+    try {
+        const data = JSON.parse(body);
+        return data.error || data.message || body;
+    } catch {
+        return body;
+    }
+}
+
+async function loadVMMetrics() {
+    const rows = $("vm-metrics-rows");
+    if (!rows) return;
+
+    rows.innerHTML =
+        '<tr><td colspan="3">Loading metrics...</td></tr>';
+
+    vmHideMessage();
+
+    try {
+        const response = await fetch("/api/vm/metrics", {
+            cache: "no-store"
+        });
+
+        if (!response.ok) {
+            throw new Error(await vmReadError(response));
+        }
+
+        const data = await response.json();
+
+        vmMetrics = Array.isArray(data.metrics)
+            ? data.metrics
+            : [];
+
+        renderVMMetrics();
+
+    } catch (error) {
+        rows.innerHTML =
+            '<tr><td colspan="3">Unable to load metrics.</td></tr>';
+
+        $("vm-metrics-count").textContent = "—";
+        vmShowMessage(error.message || "Unable to load metrics.", true);
+    }
+}
+
+function renderVMMetrics() {
+    const rows = $("vm-metrics-rows");
+    if (!rows) return;
+
+    const filtered = vmMetrics.filter(metric =>
+        metric.name.toLowerCase().includes(
+            vmMetricsFilter.toLowerCase()
+        )
+    );
+
+    $("vm-metrics-count").textContent =
+        `${filtered.length} of ${vmMetrics.length} metrics`;
+
+    if (!filtered.length) {
+        rows.innerHTML =
+            '<tr><td colspan="3">No metrics found.</td></tr>';
+        return;
+    }
+
+    rows.innerHTML = filtered.map(metric => `
+        <tr>
+            <td class="metric-name">${esc(metric.name)}</td>
+
+            <td>${esc(vmFormatTimestamp(metric.last_write))}</td>
+
+            <td class="actions">
+                <button type="button"
+                    class="danger"
+                    data-vm-delete="${esc(metric.name)}">
+                    Delete
+                </button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+function setVMDeleteBusy(busy) {
+    vmMetricDeleteInProgress = busy;
+
+    const confirmButton = $("vm-delete-confirm");
+    const cancelButton = $("vm-delete-cancel");
+    const closeButton = $("vm-delete-close");
+
+    if (confirmButton) {
+        confirmButton.disabled = busy;
+        confirmButton.textContent = busy ? "Deleting..." : "Delete Metric";
+    }
+
+    if (cancelButton) cancelButton.disabled = busy;
+    if (closeButton) closeButton.disabled = busy;
+
+    $("vm-delete-dialog")?.classList.toggle("is-busy", busy);
+}
+
+function openVMDeleteDialog(name) {
+    if (vmMetricDeleteInProgress) return;
+
+    vmMetricPendingDelete = name;
+
+    $("vm-delete-message").textContent =
+        `Are you sure you want to delete "${name}"?`;
+
+    vmHideDeleteError();
+    setVMDeleteBusy(false);
+
+    $("vm-delete-dialog").showModal();
+}
+
+function closeVMDeleteDialog() {
+    if (vmMetricDeleteInProgress) return;
+
+    const dialog = $("vm-delete-dialog");
+
+    if (dialog?.open) {
+        dialog.close();
+    }
+
+    vmMetricPendingDelete = null;
+    vmHideDeleteError();
+}
+
+async function confirmVMDelete() {
+    const name = vmMetricPendingDelete;
+
+    if (!name || vmMetricDeleteInProgress) return;
+
+    vmHideDeleteError();
+    vmHideMessage();
+    setVMDeleteBusy(true);
+
+    try {
+        const response = await fetch("/api/vm/metric-delete", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({ name })
+        });
+
+        if (!response.ok) {
+            throw new Error(await vmReadError(response));
+        }
+
+        const responseText = await response.text();
+        let result = {};
+
+        if (responseText.trim()) {
+            try {
+                result = JSON.parse(responseText);
+            } catch {
+                // A non-JSON success response is acceptable.
+            }
+        }
+
+        // Close only after the server confirms that deletion succeeded.
+        const dialog = $("vm-delete-dialog");
+        if (dialog?.open) dialog.close();
+
+        vmMetricPendingDelete = null;
+        vmHideDeleteError();
+
+        await loadVMMetrics();
+
+        if (typeof result.deleted_series === "number") {
+            vmShowMessage(
+                `Successfully deleted ${result.deleted_series} series for ${name}.`
+            );
+        } else {
+            vmShowMessage(`Metric "${name}" deleted successfully.`);
+        }
+
+    } catch (error) {
+        // Keep the dialog open so the user can see the failure and retry.
+        vmShowDeleteError(
+            error.message || "Unable to delete the metric. Please try again."
+        );
+
+    } finally {
+        setVMDeleteBusy(false);
+    }
+}
+
+// Refresh
+$("vm-metrics-refresh")?.addEventListener(
+    "click",
+    loadVMMetrics
+);
+
+// Search
+$("vm-metrics-search")?.addEventListener("input", event => {
+    vmMetricsFilter = event.target.value || "";
+    renderVMMetrics();
+});
+
+// Delete buttons in the list
+$("vm-metrics-rows")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-vm-delete]");
+
+    if (button) {
+        openVMDeleteDialog(button.dataset.vmDelete);
+    }
+});
+
+// Confirmation dialog buttons
+$("vm-delete-confirm")?.addEventListener(
+    "click",
+    confirmVMDelete
+);
+
+$("vm-delete-cancel")?.addEventListener(
+    "click",
+    closeVMDeleteDialog
+);
+
+$("vm-delete-close")?.addEventListener(
+    "click",
+    closeVMDeleteDialog
+);
+
+// Close when clicking outside the dialog
+$("vm-delete-dialog")?.addEventListener("click", event => {
+    if (event.target === $("vm-delete-dialog")) {
+        closeVMDeleteDialog();
+    }
+});
+
+// Prevent Escape from closing the dialog while deletion is in progress.
+$("vm-delete-dialog")?.addEventListener("cancel", event => {
+    if (vmMetricDeleteInProgress) {
+        event.preventDefault();
+    }
+});

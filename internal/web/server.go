@@ -206,6 +206,9 @@ func (s *Server) Handler() http.Handler {
 	// Protected API.
 	mux.HandleFunc("/api/status", s.status)
 	mux.HandleFunc("/api/vm-health", s.vmHealth)
+	mux.HandleFunc("/api/vm/metrics", s.vmMetricsAPI)
+	mux.HandleFunc("/api/vm/metric-details", s.vmMetricDetailsAPI)
+	mux.HandleFunc("/api/vm/metric-delete", s.vmMetricDeleteAPI)
 	// WebSocket is served on its own listener.
 	mux.HandleFunc("/api/session/heartbeat", s.heartbeat)
 	mux.HandleFunc("/api/metric-status", s.metricStatusAPI)
